@@ -3,6 +3,7 @@ mod config;
 mod cv;
 mod dedup;
 mod fetch;
+mod ignore;
 mod input;
 mod jobs;
 
@@ -40,6 +41,7 @@ async fn main() -> Res<()> {
 
     let args = input::parse_args()?;
     let config = Config::load()?;
+    let ignore_rules = ignore::load()?;
 
     // URLs on the command line win; otherwise use the enabled sources from the config.
     let targets: Vec<(String, String)> = if args.urls.is_empty() {
@@ -74,6 +76,15 @@ async fn main() -> Res<()> {
                 failed += 1;
             }
         }
+    }
+
+    // Remove ignored jobs before the dedup step, so that it gets fewer rows.
+    if !ignore_rules.is_empty() {
+        let removed = ignore::apply(&mut rows, &ignore_rules);
+        eprintln!(
+            "{removed} jobs ignored (ignore list: {} entries)",
+            ignore_rules.len()
+        );
     }
 
     if args.kill_dups && rows.len() > 1 {

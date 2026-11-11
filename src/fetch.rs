@@ -58,7 +58,9 @@ fn html_to_text(html: &str, base: &Url) -> String {
             // Jump past the matching closing tag.
             let close = format!("</{name}");
             i = match lower[end..].find(&close) {
-                Some(n) => lower[end + n..].find('>').map_or(html.len(), |m| end + n + m + 1),
+                Some(n) => lower[end + n..]
+                    .find('>')
+                    .map_or(html.len(), |m| end + n + m + 1),
                 None => html.len(),
             };
             continue;
@@ -77,7 +79,11 @@ fn html_to_text(html: &str, base: &Url) -> String {
             }
         }
 
-        out.push(if BLOCK_TAGS.contains(&name.as_str()) { '\n' } else { ' ' });
+        out.push(if BLOCK_TAGS.contains(&name.as_str()) {
+            '\n'
+        } else {
+            ' '
+        });
         i = end + 1;
     }
 

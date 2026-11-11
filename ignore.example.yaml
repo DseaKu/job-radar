@@ -1,0 +1,27 @@
+# Template for your ignore list. Copy it, then add the jobs you do not want to see again:
+#
+#   cp ignore.example.yaml ignore.yaml
+#
+# Git ignores ignore.yaml. Use another file with JOB_RADAR_IGNORE=<path>.
+#
+# Jobs that match an entry are not written to the CSV.
+# An entry matches a job if ALL the fields that it gives match:
+#   url      - the same job link (copy it from the `url` column of the CSV).
+#              Case, a trailing "/" and a "#fragment" do not count.
+#   company  - this text is in the company name (case does not count)
+#   title    - this text is in the job title (case does not count)
+#   note     - free text for you; the tool does not use it
+#
+# Tip: the same job can have a different link on each platform.
+# Use company + title to ignore it on all platforms.
+ignore:
+  # One job, by its link
+  - url: https://www.arbeitsagentur.de/jobsuche/jobdetail/10000-1208572302-S
+    note: applied 2026-11-01
+
+  # One job on all platforms
+  - company: XZ GmbH
+    title: Junior Softwareentwickler
+
+  # All jobs of a company
+  - company: XY AG

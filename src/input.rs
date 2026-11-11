@@ -52,7 +52,12 @@ pub fn parse_args() -> Res<Args> {
         std::process::exit(1);
     }
 
-    Ok(Args { cv, urls, out, kill_dups })
+    Ok(Args {
+        cv,
+        urls,
+        out,
+        kill_dups,
+    })
 }
 
 /// Prints the usage text to stdout and exits successfully (for --help).

@@ -74,6 +74,23 @@ cargo run -- page-text 'https://www.stepstone.de/jobs/it/in-witten?radius=25'
 
 If the output shows the job titles, add the URL to `sources`.
 
+## Ignore list
+
+To skip jobs that you already applied to, put them in `ignore.yaml`.
+Git ignores this file. Create it from the template:
+
+```sh
+cp ignore.example.yaml ignore.yaml
+```
+
+Each entry has one or more of `url`, `company` and `title`. A job is ignored if all given
+fields match. `url` must be the same link. `company` and `title` match if the text is part of
+the value (case does not count). The same job has a different link on each platform, so
+use `company` + `title` to ignore it everywhere. The optional `note` field is for you.
+
+The ignored jobs are removed after the AI read the pages, so they still cost tokens.
+To use another file, set `JOB_RADAR_IGNORE=<path>`.
+
 ## Output language
 
 Set `output_language` in `config.yaml` (default: `English`). It controls the language of

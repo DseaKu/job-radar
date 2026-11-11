@@ -23,11 +23,60 @@ const DEFAULT_SOURCES_PATH: &str = "sources.yaml";
 
 /// The search pages file, loaded from `sources.yaml` (or the file named by `JOB_RADAR_SOURCES`).
 /// It is separate from the config so that it can stay out of Git.
+///
+/// All other top-level keys are variables: `radius: 25` replaces `{{ radius }}` in each URL.
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct SourcesFile {
     #[serde(default)]
     sources: Vec<Source>,
+    #[serde(flatten)]
+    vars: BTreeMap<String, serde_yaml::Value>,
+}
+
+impl SourcesFile {
+    /// Replaces each `{{ name }}` in the URLs with its variable. An unknown name is an error.
+    fn expand(mut self) -> Res<Vec<Source>> {
+        for source in &mut self.sources {
+            source.url = expand_vars(&source.url, &self.vars)
+                .map_err(|e| format!("source '{}': {e}", source.name))?;
+        }
+        Ok(self.sources)
+    }
+}
+
+fn expand_vars(text: &str, vars: &BTreeMap<String, serde_yaml::Value>) -> Res<String> {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find("{{") {
+        let end = rest[start..]
+            .find("}}")
+            .ok_or_else(|| format!("'{{{{' without '}}}}' in {text}"))?
+            + start;
+        let name = rest[start + 2..end].trim();
+        let value = match vars.get(name) {
+            Some(serde_yaml::Value::String(s)) => s.clone(),
+            Some(serde_yaml::Value::Number(n)) => n.to_string(),
+            Some(serde_yaml::Value::Bool(b)) => b.to_string(),
+            Some(_) => return Err(format!("variable '{name}' must be a text or a number").into()),
+            None => {
+                let known: Vec<_> = vars.keys().map(String::as_str).collect();
+                return Err(format!(
+                    "unknown variable '{name}' (defined: {})",
+                    if known.is_empty() {
+                        "none".to_string()
+                    } else {
+                        known.join(", ")
+                    }
+                )
+                .into());
+            }
+        };
+        out.push_str(&rest[..start]);
+        out.push_str(&value);
+        rest = &rest[end + 2..];
+    }
+    out.push_str(rest);
+    Ok(out)
 }
 
 /// Loads the search pages. A missing default file gives an empty list.
@@ -42,7 +91,8 @@ pub fn load_sources() -> Res<Vec<Source>> {
     let text = fs::read_to_string(&path).map_err(|e| format!("cannot read {path}: {e}"))?;
     let file: SourcesFile =
         serde_yaml::from_str(&text).map_err(|e| format!("invalid {path}: {e}"))?;
-    Ok(file.sources)
+    file.expand()
+        .map_err(|e| format!("invalid {path}: {e}").into())
 }
 
 /// One search page to read.
@@ -183,9 +233,33 @@ mod tests {
     #[test]
     fn sources_files_parse() {
         for path in ["sources.example.yaml", "sources.yaml"] {
-            let Ok(text) = fs::read_to_string(path) else { continue };
+            let Ok(text) = fs::read_to_string(path) else {
+                continue;
+            };
             let file: SourcesFile = serde_yaml::from_str(&text).expect(path);
-            assert!(!file.sources.is_empty(), "{path} has no sources");
+            let sources = file.expand().expect(path);
+            assert!(!sources.is_empty(), "{path} has no sources");
+            assert!(sources.iter().all(|s| !s.url.contains("{{")), "{path}");
         }
+    }
+
+    #[test]
+    fn expands_variables() {
+        let text = "radius: 25\ncity: witten\nsources:\n  - name: A\n    url: https://a.de/?wo={{city}}&r={{ radius }}\n";
+        let file: SourcesFile = serde_yaml::from_str(text).unwrap();
+        assert_eq!(
+            file.expand().unwrap()[0].url,
+            "https://a.de/?wo=witten&r=25"
+        );
+
+        let bad: SourcesFile =
+            serde_yaml::from_str("sources:\n  - name: A\n    url: https://a.de/?r={{ radius }}\n")
+                .unwrap();
+        assert!(
+            bad.expand()
+                .unwrap_err()
+                .to_string()
+                .contains("unknown variable 'radius'")
+        );
     }
 }

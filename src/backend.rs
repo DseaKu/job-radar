@@ -196,10 +196,14 @@ impl Backend {
         let payload = send(request).await?;
         // Input = uncached + cache-read + cache-write tokens.
         let usage = &payload["usage"];
-        let input = ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]
-            .iter()
-            .filter_map(|k| usage[*k].as_u64())
-            .sum::<u64>();
+        let input = [
+            "input_tokens",
+            "cache_read_input_tokens",
+            "cache_creation_input_tokens",
+        ]
+        .iter()
+        .filter_map(|k| usage[*k].as_u64())
+        .sum::<u64>();
         self.record_usage(&json!(input), &usage["output_tokens"]);
 
         if payload["stop_reason"] == "refusal" {

@@ -6,3 +6,6 @@ jobs.csv
 
 # Private search pages (template: sources.example.yaml)
 sources.yaml
+
+# Private ignore list (template: ignore.example.yaml)
+ignore.yaml

@@ -32,7 +32,8 @@ pub fn read(path: &str) -> Res<String> {
 }
 
 fn pdf_to_text(path: &str) -> Res<String> {
-    let raw = pdf_extract::extract_text(path).map_err(|e| format!("cannot read PDF {path}: {e}"))?;
+    let raw =
+        pdf_extract::extract_text(path).map_err(|e| format!("cannot read PDF {path}: {e}"))?;
     let text = clean(&raw);
     if text.split_whitespace().count() < 20 {
         return Err(format!(
@@ -70,6 +71,9 @@ mod tests {
 
     #[test]
     fn cleans_whitespace() {
-        assert_eq!(clean("\n\n  Jane   Doe \n\n\n\nRust  dev\n"), "Jane Doe\n\nRust dev\n");
+        assert_eq!(
+            clean("\n\n  Jane   Doe \n\n\n\nRust  dev\n"),
+            "Jane Doe\n\nRust dev\n"
+        );
     }
 }

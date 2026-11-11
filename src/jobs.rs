@@ -116,8 +116,7 @@ pub async fn from_url(
                     let can_split = chunk.len() >= 2 * MIN_PAGE_CHARS
                         && label.matches('.').count() < MAX_SPLITS;
                     if !saved.is_empty() && can_split {
-                        let halves =
-                            split_chunks(chunk, chunk.len() * 55 / 100, chunk.len() / 20);
+                        let halves = split_chunks(chunk, chunk.len() * 55 / 100, chunk.len() / 20);
                         let names: Vec<String> =
                             (1..=halves.len()).map(|n| format!("{label}.{n}")).collect();
                         eprintln!(
@@ -180,7 +179,11 @@ fn to_row(job: &Value, source: &str) -> JobRow {
         match_score: job["match_score"]
             .as_i64()
             .or_else(|| job["match_score"].as_f64().map(|f| f.round() as i64))
-            .or_else(|| job["match_score"].as_str().and_then(|s| s.trim().parse().ok())),
+            .or_else(|| {
+                job["match_score"]
+                    .as_str()
+                    .and_then(|s| s.trim().parse().ok())
+            }),
         title: field(job, "title"),
         company: field(job, "company"),
         location: field(job, "location"),
@@ -204,13 +207,19 @@ fn split_chunks(text: &str, size: usize, overlap: usize) -> Vec<&str> {
         }
         let hard_end = floor_boundary(text, start + size);
         let mid = floor_boundary(text, start + size / 2);
-        let end = text[mid..hard_end].rfind('\n').map_or(hard_end, |i| mid + i + 1);
+        let end = text[mid..hard_end]
+            .rfind('\n')
+            .map_or(hard_end, |i| mid + i + 1);
         chunks.push(&text[start..end]);
 
         let back = floor_boundary(text, end - overlap);
         let next = text[back..end].find('\n').map_or(back, |i| back + i + 1);
         // Always move forward, also if the overlap has no line break.
-        start = if next > start && next < end { next } else { end };
+        start = if next > start && next < end {
+            next
+        } else {
+            end
+        };
     }
 }
 
@@ -244,7 +253,8 @@ fn merge_overlap(rows: Vec<JobRow>) -> Vec<JobRow> {
 /// Writes the rows to a CSV file, best match first.
 pub fn write_csv(path: &str, mut rows: Vec<JobRow>) -> Res<()> {
     rows.sort_by_key(|r| std::cmp::Reverse(r.match_score.unwrap_or(-1)));
-    let mut writer = csv::Writer::from_path(path).map_err(|e| format!("cannot write {path}: {e}"))?;
+    let mut writer =
+        csv::Writer::from_path(path).map_err(|e| format!("cannot write {path}: {e}"))?;
     for row in rows {
         writer.serialize(row)?;
     }
@@ -276,7 +286,9 @@ fn parse_json_array(reply: &str) -> Res<Vec<Value>> {
 
 /// Reads the complete objects from a reply that was cut off inside the JSON array.
 fn parse_partial_array(reply: &str) -> Vec<Value> {
-    let Some(start) = reply.find('[') else { return Vec::new() };
+    let Some(start) = reply.find('[') else {
+        return Vec::new();
+    };
     // Try each `}` from the end: the text up to it plus `]` is valid if that `}` closes an object.
     for (end, _) in reply.match_indices('}').rev().take(50) {
         if end < start {

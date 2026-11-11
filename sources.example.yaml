@@ -9,15 +9,20 @@
 # Tip: do the search in your browser, then copy the URL from the address bar.
 # Test a new page without AI cost: cargo run -- page-text '<url>'
 # Not usable (they block the request or need JavaScript): Indeed, meinestadt.de, jobware, kimeta.
+#
+# Variables: each top-level key except `sources` is a variable.
+# `{{ name }}` in a URL is replaced with its value. An unknown name is an error.
+radius: 25
+
 sources:
   - name: Arbeitsagentur
-    url: https://www.arbeitsagentur.de/jobsuche/suche?angebotsart=1&was=<keyword>&wo=<city>&umkreis=25&sort=veroeffdatum
+    url: https://www.arbeitsagentur.de/jobsuche/suche?angebotsart=1&was=<keyword>&wo=<city>&umkreis={{ radius }}&sort=veroeffdatum
 
   - name: LinkedIn
-    url: https://www.linkedin.com/jobs/search?keywords=<keyword>&location=<city>&distance=25
+    url: https://www.linkedin.com/jobs/search?keywords=<keyword>&location=<city>&distance={{ radius }}
 
   - name: StepStone
-    url: https://www.stepstone.de/jobs/<keyword>/in-<city>?radius=25
+    url: https://www.stepstone.de/jobs/<keyword>/in-<city>?radius={{ radius }}
 
   - name: XING
     url: https://www.xing.com/jobs/search?keywords=<keyword>&location=<city>&radius=20

@@ -44,7 +44,11 @@ pub fn merge(rows: Vec<JobRow>, groups: Vec<Vec<usize>>) -> Vec<JobRow> {
     for group in groups {
         let best = *group
             .iter()
-            .max_by_key(|&&i| slots[i].as_ref().map_or(-1, |r| r.match_score.unwrap_or(-1)))
+            .max_by_key(|&&i| {
+                slots[i]
+                    .as_ref()
+                    .map_or(-1, |r| r.match_score.unwrap_or(-1))
+            })
             .expect("groups are not empty");
         let mut keep = slots[best].take().expect("each index is used once");
         for &i in &group {
@@ -66,10 +70,18 @@ pub fn merge(rows: Vec<JobRow>, groups: Vec<Vec<usize>>) -> Vec<JobRow> {
 /// Reads the groups from the reply. Ignores bad indices and indices that are already in a group.
 fn parse_groups(reply: &str, len: usize) -> Res<Vec<Vec<usize>>> {
     let (Some(start), Some(end)) = (reply.find('['), reply.rfind(']')) else {
-        return Err(format!("dedup: the model did not return a JSON array: {}", preview(reply)).into());
+        return Err(format!(
+            "dedup: the model did not return a JSON array: {}",
+            preview(reply)
+        )
+        .into());
     };
-    let raw: Vec<Value> = serde_json::from_str(&reply[start..=end])
-        .map_err(|e| format!("dedup: invalid JSON from the model ({e}): {}", preview(reply)))?;
+    let raw: Vec<Value> = serde_json::from_str(&reply[start..=end]).map_err(|e| {
+        format!(
+            "dedup: invalid JSON from the model ({e}): {}",
+            preview(reply)
+        )
+    })?;
 
     let mut used = vec![false; len];
     let mut groups = Vec::new();

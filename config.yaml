@@ -2,7 +2,7 @@
 
 # The provider entry to use. To switch, change this one line.
 # active: claude
-active: local
+active: claude
 
 # Language for "description" and "match_reason" in the CSV (for example English, German).
 # Job titles, company names and locations stay as they appear on the page.
@@ -36,7 +36,7 @@ providers:
   claude:
     type: anthropic
     model: claude-haiku-5-5
-    effort: medium
+    effort: low
     max_tokens: 16000   # a page with many jobs needs a long reply
     # model: claude-sonnet-5-5
 
