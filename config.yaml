@@ -19,15 +19,18 @@ output_language: German
 #                  anthropic: low | medium | high | xhigh | max
 #                  openai: sent as reasoning_effort (only reasoning models accept it)
 #                  ollama: any value turns thinking on; without it, thinking is off
-#   context_length - ollama only: context window in tokens (default 32768).
-#                  Ollama's own default is about 2048 and cuts long prompts without an error.
-#                  A larger window needs more memory (qwen3:8b at 32768: about 10 GB).
+#   context_length - context window in tokens (prompt + reply). Long pages are read in parts that fit into it.
+#                  Defaults: ollama 32768, openai 128000, anthropic 200000.
+#                  A smaller value also limits the cost for each page on paid APIs.
+#                  ollama: also sent as num_ctx. Ollama's own default is about 2048 and cuts
+#                  long prompts without an error. A larger window needs more memory
+#                  (qwen3:8b at 32768: about 10 GB).
 #
 # Types: ollama (local, no token), openai (any OpenAI-compatible API), anthropic (Claude).
 providers:
   local:
     type: ollama
-    model: qwen3:14b
+    model: qwen3:4b
     context_length: 32768
 
   claude:

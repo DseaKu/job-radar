@@ -1,6 +1,7 @@
 mod backend;
 mod config;
 mod cv;
+mod dedup;
 mod fetch;
 mod input;
 mod jobs;
@@ -72,6 +73,18 @@ async fn main() -> Res<()> {
                 eprintln!("  error: {e}");
                 failed += 1;
             }
+        }
+    }
+
+    if args.kill_dups && rows.len() > 1 {
+        eprintln!("Removing duplicates ...");
+        let before = rows.len();
+        match dedup::find_dups(&backend, &rows).await {
+            Ok(groups) => {
+                rows = dedup::merge(rows, groups);
+                eprintln!("  {} duplicates removed", before - rows.len());
+            }
+            Err(e) => eprintln!("  warning: duplicates not removed: {e}"),
         }
     }
 

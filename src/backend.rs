@@ -8,7 +8,9 @@ use crate::config::{Config, ProviderKind};
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const DEFAULT_MAX_TOKENS: u32 = 4096;
-const DEFAULT_OLLAMA_CONTEXT: u32 = 32768;
+/// Rough size of one token in characters. Set low on purpose, so that the estimate is safe
+/// for German text and long URLs.
+const CHARS_PER_TOKEN: usize = 3;
 
 /// The LLM provider that the agents talk to, built from the active config entry.
 ///
@@ -64,7 +66,7 @@ impl Backend {
             model: p.model.clone(),
             max_tokens: p.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
             effort: p.effort.clone(),
-            context_length: p.context_length.unwrap_or(DEFAULT_OLLAMA_CONTEXT),
+            context_length: p.context_length.unwrap_or(p.kind.default_context_length()),
             total_in: AtomicU64::new(0),
             total_out: AtomicU64::new(0),
             calls: AtomicU64::new(0),
@@ -222,6 +224,14 @@ impl Backend {
         self.total_out.fetch_add(output, Ordering::Relaxed);
         self.calls.fetch_add(1, Ordering::Relaxed);
         eprintln!("  usage: {input} input tokens, {output} output tokens");
+    }
+
+    /// How many characters of page text fit into the context window, after the reply
+    /// (`max_tokens`), the other prompt text (`other_chars`) and a 10% safety margin.
+    pub fn page_char_budget(&self, other_chars: usize) -> usize {
+        let window = self.context_length as usize * 9 / 10;
+        let used = self.max_tokens as usize + other_chars.div_ceil(CHARS_PER_TOKEN);
+        window.saturating_sub(used) * CHARS_PER_TOKEN
     }
 
     /// A one-line summary of the token usage over all calls of this run.

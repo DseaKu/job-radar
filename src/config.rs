@@ -81,8 +81,9 @@ pub struct ProviderConfig {
     /// Sent as `output_config.effort` (anthropic) or `reasoning_effort` (openai).
     /// For ollama, any value turns thinking on; without it, thinking is off.
     pub effort: Option<String>,
-    /// Ollama only: context window in tokens (prompt + reply). Ollama's own default is small
-    /// and cuts long prompts without an error.
+    /// Context window in tokens (prompt + reply). Long pages are read in parts that fit into it.
+    /// Ollama also gets it as `num_ctx`: Ollama's own default is small and cuts long prompts
+    /// without an error.
     pub context_length: Option<u32>,
 }
 
@@ -104,6 +105,15 @@ impl ProviderKind {
             Self::Ollama => "http://localhost:11434",
             Self::OpenAi => "https://api.openai.com/v1",
             Self::Anthropic => "https://api.anthropic.com/v1",
+        }
+    }
+
+    /// The context window in tokens if the config does not set one.
+    pub fn default_context_length(self) -> u32 {
+        match self {
+            Self::Ollama => 32_768,
+            Self::OpenAi => 128_000,
+            Self::Anthropic => 200_000,
         }
     }
 

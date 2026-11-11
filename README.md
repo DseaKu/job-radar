@@ -16,6 +16,19 @@ cargo run -- --cv cv.md --out jobs.csv https://a.com/jobs https://b.com/careers
 
 CSV columns: `match_score, title, company, location, description, match_reason, url, source`.
 
+## Duplicates
+
+The same job can appear on several platforms. Add `--kill-dups` to remove the duplicates:
+
+```sh
+cargo run -- --cv cv.txt --kill-dups
+```
+
+This makes one more AI call. The AI groups the rows that are the same job.
+For each group, the row with the highest `match_score` stays.
+Its `source` column lists all sources, separated by ` | `.
+If this step fails, the tool writes the CSV with the duplicates and shows a warning.
+
 ## CV as PDF
 
 Convert the PDF to text once, check the result, then use the text file:
@@ -34,6 +47,11 @@ The tool does a plain HTTP GET. Pages that build their job list with JavaScript
 (for example LinkedIn, Workday, some Greenhouse/Lever embeds) return no jobs.
 For those sites, use the direct job-board URL (e.g. `boards.greenhouse.io/<company>`,
 `jobs.lever.co/<company>`) when one exists.
+
+Long pages are read in parts that fit into the model's context window. Set it with
+`context_length` in `config.yaml`. The tool keeps space for the CV, the prompt and `max_tokens`.
+The parts overlap by 10%, so a job at a boundary is not lost. Copies from the overlap are removed.
+Each part is one AI call, and each call sends the CV again. One page uses at most 20 parts.
 
 ## Sources
 
