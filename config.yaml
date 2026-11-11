@@ -1,0 +1,67 @@
+# Agent settings. Set AGENTS_CONFIG to use a different file.
+
+# The provider entry to use. To switch, change this one line.
+active: claude
+
+# Language for "description" and "match_reason" in the CSV (for example English, German).
+# Job titles, company names and locations stay as they appear on the page.
+output_language: German
+
+# Search pages to read when you give no URL on the command line.
+# Tip: do the search in your browser, then copy the URL from the address bar.
+# Test a new page without AI cost: cargo run -- page-text '<url>'
+# Not usable (they block the request or need JavaScript): Indeed, meinestadt.de, jobware, kimeta.
+sources:
+  - name: Arbeitsagentur
+    url: https://www.arbeitsagentur.de/jobsuche/suche?angebotsart=1&was=IT&wo=witten&umkreis=25&sort=veroeffdatum
+
+  - name: LinkedIn
+    url: https://www.linkedin.com/jobs/search?keywords=IT&location=Witten&distance=25
+
+  - name: StepStone
+    url: https://www.stepstone.de/jobs/it/in-witten?radius=25
+
+  - name: XING
+    url: https://www.xing.com/jobs/search?keywords=IT&location=Witten&radius=20
+
+  # Disabled: this URL ignores the location and shows jobs from all of Germany.
+  # Copy a search URL from the browser that filters by location, then set enabled: true.
+  - name: stellenanzeigen.de
+    url: https://www.stellenanzeigen.de/suche/?fulltext=IT&location=Witten&radius=25
+    enabled: false
+
+# Each entry needs a `type` and a `model`. Optional fields:
+#   base_url     - API address (each type has a default)
+#   api_key_env  - environment variable that holds the token (set it in your shell or .env)
+#   max_tokens   - upper limit for each reply (default 4096)
+#   effort       - how much the model thinks before it replies (default: the model's own default)
+#                  anthropic: low | medium | high | xhigh | max
+#                  openai: sent as reasoning_effort (only reasoning models accept it)
+#                  ollama: any value turns thinking on; without it, thinking is off
+#   context_length - ollama only: context window in tokens (default 32768).
+#                  Ollama's own default is about 2048 and cuts long prompts without an error.
+#                  A larger window needs more memory (qwen3:8b at 32768: about 10 GB).
+#
+# Types: ollama (local, no token), openai (any OpenAI-compatible API), anthropic (Claude).
+providers:
+  local:
+    type: ollama
+    model: qwen3:8b
+    context_length: 32768
+
+  claude:
+    type: anthropic
+    model: claude-haiku-5-5
+    effort: medium
+    max_tokens: 16000   # a page with many jobs needs a long reply
+    # model: claude-sonnet-5-5
+
+  openai:
+    type: openai
+    model: gpt-4o-mini
+
+  openrouter:
+    type: openai
+    model: meta-llama/llama-3.3-70b-instruct
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY

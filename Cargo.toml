@@ -1,0 +1,14 @@
+[package]
+name = "job_radar"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dotenvy = "0.15.7"
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+serde_yaml = "0.9.34"
+tokio = { version = "1.54.1", features = ["full"] }
+csv = "1"
+pdf-extract = "0.12.1"
