@@ -1,7 +1,8 @@
 # Agent settings. Set AGENTS_CONFIG to use a different file.
 
 # The provider entry to use. To switch, change this one line.
-active: claude
+# active: claude
+active: local
 
 # Language for "description" and "match_reason" in the CSV (for example English, German).
 # Job titles, company names and locations stay as they appear on the page.
@@ -26,7 +27,7 @@ output_language: German
 providers:
   local:
     type: ollama
-    model: qwen3:8b
+    model: qwen3:14b
     context_length: 32768
 
   claude:
