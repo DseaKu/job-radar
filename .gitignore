@@ -1,6 +1,7 @@
 /target
 .env
 *pdf
+cv*
 jobs.csv
 
 # Private search pages (template: sources.example.yaml)
