@@ -108,28 +108,42 @@ pub async fn from_url(
         let reply = match backend.chat(&system, &format!("{head}{chunk}")).await {
             Ok(r) => r,
             Err(e) => match e.downcast::<ReplyCutOff>() {
-                Ok(cut) if chunk.len() >= 2 * MIN_PAGE_CHARS && label.matches('.').count() < MAX_SPLITS => {
-                    let halves = split_chunks(chunk, chunk.len() * 55 / 100, chunk.len() / 20);
-                    let names: Vec<String> =
-                        (1..=halves.len()).map(|n| format!("{label}.{n}")).collect();
-                    eprintln!(
-                        "    reply too long ({cut}), split slice {label} into {}",
-                        names.join(", ")
-                    );
-                    for (name, half) in names.into_iter().zip(halves).rev() {
-                        queue.push_front((name, half));
-                    }
-                    continue;
-                }
                 Ok(cut) => {
-                    // Too small to split: keep the jobs that the reply completed before the cut.
                     let saved = parse_partial_array(&cut.partial);
-                    eprintln!(
-                        "    warning: slice {label}: {cut}; kept {} complete jobs from the reply",
-                        saved.len()
-                    );
+                    // Complete jobs before the cut mean "too many jobs": a smaller slice helps.
+                    // No complete job means the model did not write the list (for example it
+                    // thought or looped): a smaller slice does not help, so do not split.
+                    let can_split = chunk.len() >= 2 * MIN_PAGE_CHARS
+                        && label.matches('.').count() < MAX_SPLITS;
+                    if !saved.is_empty() && can_split {
+                        let halves =
+                            split_chunks(chunk, chunk.len() * 55 / 100, chunk.len() / 20);
+                        let names: Vec<String> =
+                            (1..=halves.len()).map(|n| format!("{label}.{n}")).collect();
+                        eprintln!(
+                            "    reply too long ({} jobs before the cut), split slice {label} into {}",
+                            saved.len(),
+                            names.join(", ")
+                        );
+                        for (name, half) in names.into_iter().zip(halves).rev() {
+                            queue.push_front((name, half));
+                        }
+                        continue;
+                    }
                     if saved.is_empty() {
+                        eprintln!(
+                            "    warning: slice {label}: the reply has no complete job before the cut \
+                             at max_tokens ({}). The model probably thinks or repeats itself.\n    \
+                             reply starts with: {}",
+                            cut.max_tokens,
+                            preview(&cut.partial).replace('\n', " ")
+                        );
                         last_error = Some(cut as Box<dyn std::error::Error>);
+                    } else {
+                        eprintln!(
+                            "    warning: slice {label}: {cut}; kept {} complete jobs from the reply",
+                            saved.len()
+                        );
                     }
                     rows.extend(saved.iter().map(|job| to_row(job, url)));
                     continue;
