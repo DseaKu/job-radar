@@ -97,7 +97,9 @@ pub async fn from_url(
         let reply = match backend.chat(&system, &format!("{head}{chunk}")).await {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("    warning: slice {}/{} failed: {e}", i + 1, chunks.len());
+                if sliced {
+                    eprintln!("    warning: slice {}/{} failed: {e}", i + 1, chunks.len());
+                }
                 last_error = Some(e);
                 continue;
             }
@@ -105,7 +107,9 @@ pub async fn from_url(
         match parse_json_array(&reply) {
             Ok(items) => rows.extend(items.iter().map(|job| to_row(job, url))),
             Err(e) => {
-                eprintln!("    warning: slice {}/{} failed: {e}", i + 1, chunks.len());
+                if sliced {
+                    eprintln!("    warning: slice {}/{} failed: {e}", i + 1, chunks.len());
+                }
                 last_error = Some(e);
             }
         }
@@ -208,9 +212,31 @@ fn parse_json_array(reply: &str) -> Res<Vec<Value>> {
     let (Some(start), Some(end)) = (reply.find('['), reply.rfind(']')) else {
         return Err(format!("the model did not return a JSON array: {}", preview(reply)).into());
     };
-    let items: Vec<Value> = serde_json::from_str(&reply[start..=end])
+    let json = &reply[start..=end];
+    // Models often copy a backslash from the page (for example `Entwickler\*in`), which is not a
+    // valid JSON escape. If the first parse fails, escape such backslashes and try again.
+    let items: Vec<Value> = serde_json::from_str(json)
+        .or_else(|e| serde_json::from_str(&fix_escapes(json)).map_err(|_| e))
         .map_err(|e| format!("invalid JSON from the model ({e}): {}", preview(reply)))?;
     Ok(items.into_iter().filter(Value::is_object).collect())
+}
+
+/// Doubles each backslash that does not start a valid JSON escape.
+fn fix_escapes(json: &str) -> String {
+    let mut out = String::with_capacity(json.len());
+    let mut chars = json.chars().peekable();
+    while let Some(c) = chars.next() {
+        out.push(c);
+        if c == '\\' {
+            match chars.peek() {
+                Some('"' | '\\' | '/' | 'b' | 'f' | 'n' | 'r' | 't' | 'u') => {
+                    out.push(chars.next().unwrap());
+                }
+                _ => out.push('\\'),
+            }
+        }
+    }
+    out
 }
 
 fn preview(s: &str) -> String {
@@ -242,6 +268,14 @@ mod tests {
             let first_line = pair[1].lines().next().unwrap();
             assert!(pair[0].contains(first_line));
         }
+    }
+
+    #[test]
+    fn fixes_invalid_escapes() {
+        let reply = r#"[{"title": "Entwickler\*in", "description": "a \"b\" c\nd"}]"#;
+        let items = parse_json_array(reply).unwrap();
+        assert_eq!(field(&items[0], "title"), r"Entwickler\*in");
+        assert_eq!(field(&items[0], "description"), "a \"b\" c\nd");
     }
 
     #[test]
