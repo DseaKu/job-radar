@@ -1,8 +1,10 @@
+use std::collections::VecDeque;
+
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::Res;
-use crate::backend::Backend;
+use crate::backend::{Backend, ReplyCutOff};
 use crate::fetch;
 
 /// Below this page budget, the model would see too little of the page to be useful.
@@ -10,6 +12,9 @@ const MIN_PAGE_CHARS: usize = 2_000;
 
 /// Upper limit for the AI calls on one page, so that a huge page cannot cause a high cost.
 const MAX_CHUNKS: usize = 20;
+
+/// How often a slice can be split again after a cut-off reply (1 → 1.1 → 1.1.1 ...).
+const MAX_SPLITS: usize = 3;
 
 const EXTRACTOR: &str = r#"You extract job postings from the text of a web page and rate how well each job fits a candidate's CV.
 
@@ -87,28 +92,62 @@ pub async fn from_url(
         );
     }
 
+    // Work list of (label, text). A slice whose reply is cut off is split in half and put back.
+    let sliced = chunks.len() > 1;
+    let mut queue: VecDeque<(String, &str)> = chunks
+        .iter()
+        .enumerate()
+        .map(|(i, c)| ((i + 1).to_string(), *c))
+        .collect();
     let mut rows = Vec::new();
     let mut last_error = None;
-    let sliced = chunks.len() > 1;
-    for (i, chunk) in chunks.iter().enumerate() {
-        if sliced {
-            eprintln!("    read slice {}/{} ...", i + 1, chunks.len());
+    while let Some((label, chunk)) = queue.pop_front() {
+        if sliced || label.contains('.') {
+            eprintln!("    read slice {label} ...");
         }
         let reply = match backend.chat(&system, &format!("{head}{chunk}")).await {
             Ok(r) => r,
-            Err(e) => {
-                if sliced {
-                    eprintln!("    warning: slice {}/{} failed: {e}", i + 1, chunks.len());
+            Err(e) => match e.downcast::<ReplyCutOff>() {
+                Ok(cut) if chunk.len() >= 2 * MIN_PAGE_CHARS && label.matches('.').count() < MAX_SPLITS => {
+                    let halves = split_chunks(chunk, chunk.len() * 55 / 100, chunk.len() / 20);
+                    let names: Vec<String> =
+                        (1..=halves.len()).map(|n| format!("{label}.{n}")).collect();
+                    eprintln!(
+                        "    reply too long ({cut}), split slice {label} into {}",
+                        names.join(", ")
+                    );
+                    for (name, half) in names.into_iter().zip(halves).rev() {
+                        queue.push_front((name, half));
+                    }
+                    continue;
                 }
-                last_error = Some(e);
-                continue;
-            }
+                Ok(cut) => {
+                    // Too small to split: keep the jobs that the reply completed before the cut.
+                    let saved = parse_partial_array(&cut.partial);
+                    eprintln!(
+                        "    warning: slice {label}: {cut}; kept {} complete jobs from the reply",
+                        saved.len()
+                    );
+                    if saved.is_empty() {
+                        last_error = Some(cut as Box<dyn std::error::Error>);
+                    }
+                    rows.extend(saved.iter().map(|job| to_row(job, url)));
+                    continue;
+                }
+                Err(e) => {
+                    if sliced {
+                        eprintln!("    warning: slice {label} failed: {e}");
+                    }
+                    last_error = Some(e);
+                    continue;
+                }
+            },
         };
         match parse_json_array(&reply) {
             Ok(items) => rows.extend(items.iter().map(|job| to_row(job, url))),
             Err(e) => {
                 if sliced {
-                    eprintln!("    warning: slice {}/{} failed: {e}", i + 1, chunks.len());
+                    eprintln!("    warning: slice {label} failed: {e}");
                 }
                 last_error = Some(e);
             }
@@ -221,6 +260,22 @@ fn parse_json_array(reply: &str) -> Res<Vec<Value>> {
     Ok(items.into_iter().filter(Value::is_object).collect())
 }
 
+/// Reads the complete objects from a reply that was cut off inside the JSON array.
+fn parse_partial_array(reply: &str) -> Vec<Value> {
+    let Some(start) = reply.find('[') else { return Vec::new() };
+    // Try each `}` from the end: the text up to it plus `]` is valid if that `}` closes an object.
+    for (end, _) in reply.match_indices('}').rev().take(50) {
+        if end < start {
+            break;
+        }
+        let candidate = format!("{}]", &reply[start..=end]);
+        if let Ok(items) = parse_json_array(&candidate) {
+            return items;
+        }
+    }
+    Vec::new()
+}
+
 /// Doubles each backslash that does not start a valid JSON escape.
 fn fix_escapes(json: &str) -> String {
     let mut out = String::with_capacity(json.len());
@@ -276,6 +331,14 @@ mod tests {
         let items = parse_json_array(reply).unwrap();
         assert_eq!(field(&items[0], "title"), r"Entwickler\*in");
         assert_eq!(field(&items[0], "description"), "a \"b\" c\nd");
+    }
+
+    #[test]
+    fn keeps_complete_jobs_from_cut_reply() {
+        let reply = r#"[{"title": "A {x}"}, {"title": "B"}, {"title": "C", "descr"#;
+        let items = parse_partial_array(reply);
+        assert_eq!(items.len(), 2);
+        assert_eq!(field(&items[1], "title"), "B");
     }
 
     #[test]

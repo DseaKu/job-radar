@@ -12,6 +12,25 @@ const DEFAULT_MAX_TOKENS: u32 = 4096;
 /// for German text and long URLs.
 const CHARS_PER_TOKEN: usize = 3;
 
+/// The reply hit `max_tokens` and is not complete. `partial` holds the text up to the cut.
+#[derive(Debug)]
+pub struct ReplyCutOff {
+    pub max_tokens: u32,
+    pub partial: String,
+}
+
+impl std::fmt::Display for ReplyCutOff {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "reply cut off at max_tokens ({}); increase max_tokens in config.yaml",
+            self.max_tokens
+        )
+    }
+}
+
+impl std::error::Error for ReplyCutOff {}
+
 /// The LLM provider that the agents talk to, built from the active config entry.
 ///
 /// Ollama uses its native chat API (the only one that accepts a context size),
@@ -113,17 +132,12 @@ impl Backend {
                 self.context_length
             );
         }
-        if payload["done_reason"] == "length" {
-            return Err(format!(
-                "reply cut off at max_tokens ({}); increase max_tokens in config.yaml",
-                self.max_tokens
-            )
-            .into());
-        }
-
         let content = payload["message"]["content"]
             .as_str()
             .ok_or_else(|| format!("unexpected API response: {payload}"))?;
+        if payload["done_reason"] == "length" {
+            return Err(self.cut_off(content));
+        }
         Ok(strip_think(content))
     }
 
@@ -152,16 +166,11 @@ impl Backend {
             &payload["usage"]["completion_tokens"],
         );
 
+        let content = payload["choices"][0]["message"]["content"].as_str();
         if payload["choices"][0]["finish_reason"] == "length" {
-            return Err(format!(
-                "reply cut off at max_tokens ({}); increase max_tokens in config.yaml",
-                self.max_tokens
-            )
-            .into());
+            return Err(self.cut_off(content.unwrap_or_default()));
         }
-
-        payload["choices"][0]["message"]["content"]
-            .as_str()
+        content
             .map(str::to_string)
             .ok_or_else(|| format!("unexpected API response: {payload}").into())
     }
@@ -193,28 +202,31 @@ impl Backend {
             .sum::<u64>();
         self.record_usage(&json!(input), &usage["output_tokens"]);
 
-        match payload["stop_reason"].as_str() {
-            Some("max_tokens") => {
-                return Err(format!(
-                    "reply cut off at max_tokens ({}); increase max_tokens in config.yaml",
-                    self.max_tokens
-                )
-                .into());
-            }
-            Some("refusal") => return Err(format!("the model refused: {payload}").into()),
-            _ => {}
+        if payload["stop_reason"] == "refusal" {
+            return Err(format!("the model refused: {payload}").into());
         }
 
         // The reply is a list of content blocks; join the text blocks.
         let blocks = payload["content"]
             .as_array()
             .ok_or_else(|| format!("unexpected API response: {payload}"))?;
-        Ok(blocks
+        let text = blocks
             .iter()
             .filter(|b| b["type"] == "text")
             .filter_map(|b| b["text"].as_str())
             .collect::<Vec<_>>()
-            .join(""))
+            .join("");
+        if payload["stop_reason"] == "max_tokens" {
+            return Err(self.cut_off(&text));
+        }
+        Ok(text)
+    }
+
+    fn cut_off(&self, partial: &str) -> Box<dyn std::error::Error> {
+        Box::new(ReplyCutOff {
+            max_tokens: self.max_tokens,
+            partial: strip_think(partial),
+        })
     }
 
     /// Prints the token usage of one call and adds it to the run totals.
