@@ -1,0 +1,28 @@
+# Template for your search pages. Copy it, then put your own searches in the copy:
+#
+#   cp sources.example.yaml sources.yaml
+#
+# Git ignores sources.yaml, so your searches stay private.
+# Use another file with JOB_RADAR_SOURCES=<path>.
+#
+# The tool reads these pages when you give no URL on the command line.
+# Tip: do the search in your browser, then copy the URL from the address bar.
+# Test a new page without AI cost: cargo run -- page-text '<url>'
+# Not usable (they block the request or need JavaScript): Indeed, meinestadt.de, jobware, kimeta.
+sources:
+  - name: Arbeitsagentur
+    url: https://www.arbeitsagentur.de/jobsuche/suche?angebotsart=1&was=<keyword>&wo=<city>&umkreis=25&sort=veroeffdatum
+
+  - name: LinkedIn
+    url: https://www.linkedin.com/jobs/search?keywords=<keyword>&location=<city>&distance=25
+
+  - name: StepStone
+    url: https://www.stepstone.de/jobs/<keyword>/in-<city>?radius=25
+
+  - name: XING
+    url: https://www.xing.com/jobs/search?keywords=<keyword>&location=<city>&radius=20
+
+  # Set `enabled: false` to skip a source without deleting it.
+  - name: Example (disabled)
+    url: https://example.com/careers
+    enabled: false

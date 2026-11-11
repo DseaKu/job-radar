@@ -42,8 +42,7 @@ async fn main() -> Res<()> {
 
     // URLs on the command line win; otherwise use the enabled sources from the config.
     let targets: Vec<(String, String)> = if args.urls.is_empty() {
-        config
-            .sources
+        config::load_sources()?
             .iter()
             .filter(|s| s.enabled)
             .map(|s| (s.name.clone(), s.url.clone()))
@@ -52,7 +51,9 @@ async fn main() -> Res<()> {
         args.urls.iter().map(|u| (u.clone(), u.clone())).collect()
     };
     if targets.is_empty() {
-        return Err("no URLs given and no enabled `sources` in config.yaml".into());
+        return Err("no URLs given and no enabled sources in sources.yaml \
+                    (create it with: cp sources.example.yaml sources.yaml)"
+            .into());
     }
 
     let backend = Backend::from_config(&config)?;
@@ -77,6 +78,7 @@ async fn main() -> Res<()> {
     let count = rows.len();
     jobs::write_csv(&args.out, rows)?;
     eprintln!("Wrote {count} jobs to {}", args.out);
+    eprintln!("{}", backend.usage_summary());
 
     if failed == targets.len() {
         return Err("all URLs failed".into());

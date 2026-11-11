@@ -15,7 +15,7 @@ Usage: job_radar [--cv <cv.txt|cv.pdf>] [--out <jobs.csv>] [<url> ...]
        job_radar convert-cv <cv.pdf> [<cv.txt>]
        job_radar page-text <url>
 
-Without URLs, the enabled `sources` in config.yaml are read.
+Without URLs, the enabled sources in sources.yaml are read.
 `page-text` prints the text the AI would see (no AI call), to test a new source.
 
 The CV comes from --cv, or from stdin if no --cv is given:
@@ -33,7 +33,7 @@ pub fn parse_args() -> Res<Args> {
         match arg.as_str() {
             "--cv" => cv_path = Some(args.next().ok_or("--cv needs a file path")?),
             "--out" | "-o" => out = args.next().ok_or("--out needs a file path")?,
-            "-h" | "--help" => usage_exit(),
+            "-h" | "--help" | "help" => print_usage_and_exit(),
             _ if arg.starts_with('-') => return Err(format!("unknown option: {arg}").into()),
             _ => urls.push(arg),
         }
@@ -44,15 +44,17 @@ pub fn parse_args() -> Res<Args> {
         None => read_piped_input()?,
     };
     if cv.trim().is_empty() {
-        return Err("no CV given: use --cv <file> or pipe the CV into stdin".into());
+        eprintln!("error: no CV given: use --cv <file> or pipe the CV into stdin\n\n{USAGE}");
+        std::process::exit(1);
     }
 
     Ok(Args { cv, urls, out })
 }
 
-fn usage_exit() -> ! {
-    eprintln!("{USAGE}");
-    std::process::exit(1);
+/// Prints the usage text to stdout and exits successfully (for --help).
+fn print_usage_and_exit() -> ! {
+    println!("{USAGE}");
+    std::process::exit(0);
 }
 
 /// Reads everything from stdin if it is piped, otherwise returns an empty string.

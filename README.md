@@ -37,12 +37,15 @@ For those sites, use the direct job-board URL (e.g. `boards.greenhouse.io/<compa
 
 ## Sources
 
-Without URLs on the command line, the tool reads every enabled entry in `sources`
-in `config.yaml`:
+Without URLs on the command line, the tool reads every enabled entry in `sources.yaml`.
+Git ignores this file, so your searches stay private. Create it from the template:
 
 ```sh
+cp sources.example.yaml sources.yaml
 cargo run -- --cv cv.txt
 ```
+
+To use another file, set `JOB_RADAR_SOURCES=<path>`.
 
 To add a site, do the search in your browser, copy the URL, and test it first
 (no AI call, no cost):

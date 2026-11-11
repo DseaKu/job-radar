@@ -7,28 +7,8 @@ active: claude
 # Job titles, company names and locations stay as they appear on the page.
 output_language: German
 
-# Search pages to read when you give no URL on the command line.
-# Tip: do the search in your browser, then copy the URL from the address bar.
-# Test a new page without AI cost: cargo run -- page-text '<url>'
-# Not usable (they block the request or need JavaScript): Indeed, meinestadt.de, jobware, kimeta.
-sources:
-  - name: Arbeitsagentur
-    url: https://www.arbeitsagentur.de/jobsuche/suche?angebotsart=1&was=IT&wo=witten&umkreis=25&sort=veroeffdatum
-
-  - name: LinkedIn
-    url: https://www.linkedin.com/jobs/search?keywords=IT&location=Witten&distance=25
-
-  - name: StepStone
-    url: https://www.stepstone.de/jobs/it/in-witten?radius=25
-
-  - name: XING
-    url: https://www.xing.com/jobs/search?keywords=IT&location=Witten&radius=20
-
-  # Disabled: this URL ignores the location and shows jobs from all of Germany.
-  # Copy a search URL from the browser that filters by location, then set enabled: true.
-  - name: stellenanzeigen.de
-    url: https://www.stellenanzeigen.de/suche/?fulltext=IT&location=Witten&radius=25
-    enabled: false
+# The search pages are in sources.yaml (private, not in Git).
+# Template: sources.example.yaml.
 
 # Each entry needs a `type` and a `model`. Optional fields:
 #   base_url     - API address (each type has a default)

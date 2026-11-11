@@ -1,4 +1,5 @@
 use std::env;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::{Value, json};
 
@@ -23,6 +24,10 @@ pub struct Backend {
     max_tokens: u32,
     effort: Option<String>,
     context_length: u32,
+    /// Token totals over all calls of this run.
+    total_in: AtomicU64,
+    total_out: AtomicU64,
+    calls: AtomicU64,
 }
 
 impl Backend {
@@ -60,6 +65,9 @@ impl Backend {
             max_tokens: p.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
             effort: p.effort.clone(),
             context_length: p.context_length.unwrap_or(DEFAULT_OLLAMA_CONTEXT),
+            total_in: AtomicU64::new(0),
+            total_out: AtomicU64::new(0),
+            calls: AtomicU64::new(0),
         })
     }
 
@@ -92,6 +100,7 @@ impl Backend {
             .post(format!("{}/api/chat", self.base_url))
             .json(&body);
         let payload = send(request).await?;
+        self.record_usage(&payload["prompt_eval_count"], &payload["eval_count"]);
 
         // Ollama cuts a prompt that is too long without an error. Detect it from the token count.
         let prompt_tokens = payload["prompt_eval_count"].as_u64().unwrap_or(0);
@@ -136,6 +145,10 @@ impl Backend {
             request = request.bearer_auth(key);
         }
         let payload = send(request).await?;
+        self.record_usage(
+            &payload["usage"]["prompt_tokens"],
+            &payload["usage"]["completion_tokens"],
+        );
 
         if payload["choices"][0]["finish_reason"] == "length" {
             return Err(format!(
@@ -170,6 +183,13 @@ impl Backend {
             request = request.header("x-api-key", key);
         }
         let payload = send(request).await?;
+        // Input = uncached + cache-read + cache-write tokens.
+        let usage = &payload["usage"];
+        let input = ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]
+            .iter()
+            .filter_map(|k| usage[*k].as_u64())
+            .sum::<u64>();
+        self.record_usage(&json!(input), &usage["output_tokens"]);
 
         match payload["stop_reason"].as_str() {
             Some("max_tokens") => {
@@ -193,6 +213,25 @@ impl Backend {
             .filter_map(|b| b["text"].as_str())
             .collect::<Vec<_>>()
             .join(""))
+    }
+
+    /// Prints the token usage of one call and adds it to the run totals.
+    fn record_usage(&self, input: &Value, output: &Value) {
+        let (input, output) = (input.as_u64().unwrap_or(0), output.as_u64().unwrap_or(0));
+        self.total_in.fetch_add(input, Ordering::Relaxed);
+        self.total_out.fetch_add(output, Ordering::Relaxed);
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        eprintln!("  usage: {input} input tokens, {output} output tokens");
+    }
+
+    /// A one-line summary of the token usage over all calls of this run.
+    pub fn usage_summary(&self) -> String {
+        format!(
+            "Total usage: {} input tokens, {} output tokens ({} AI calls)",
+            self.total_in.load(Ordering::Relaxed),
+            self.total_out.load(Ordering::Relaxed),
+            self.calls.load(Ordering::Relaxed),
+        )
     }
 
     /// A short label for the active provider and model, for logging.

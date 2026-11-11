@@ -17,9 +17,32 @@ pub struct Config {
     /// Language for the descriptions and match reasons in the CSV (for example `German`).
     #[serde(default = "default_output_language")]
     pub output_language: String,
-    /// Search pages to read when no URL is given on the command line.
+}
+
+const DEFAULT_SOURCES_PATH: &str = "sources.yaml";
+
+/// The search pages file, loaded from `sources.yaml` (or the file named by `JOB_RADAR_SOURCES`).
+/// It is separate from the config so that it can stay out of Git.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourcesFile {
     #[serde(default)]
-    pub sources: Vec<Source>,
+    sources: Vec<Source>,
+}
+
+/// Loads the search pages. A missing default file gives an empty list.
+pub fn load_sources() -> Res<Vec<Source>> {
+    let (path, explicit) = match env::var("JOB_RADAR_SOURCES") {
+        Ok(p) if !p.trim().is_empty() => (p, true),
+        _ => (DEFAULT_SOURCES_PATH.to_string(), false),
+    };
+    if !explicit && !Path::new(&path).exists() {
+        return Ok(Vec::new());
+    }
+    let text = fs::read_to_string(&path).map_err(|e| format!("cannot read {path}: {e}"))?;
+    let file: SourcesFile =
+        serde_yaml::from_str(&text).map_err(|e| format!("invalid {path}: {e}"))?;
+    Ok(file.sources)
 }
 
 /// One search page to read.
@@ -108,7 +131,6 @@ impl Default for Config {
             active: "local".to_string(),
             providers: BTreeMap::from([("local".to_string(), local)]),
             output_language: default_output_language(),
-            sources: Vec::new(),
         }
     }
 }
@@ -141,5 +163,19 @@ impl Config {
             )
         })?;
         Ok((&self.active, provider))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sources_files_parse() {
+        for path in ["sources.example.yaml", "sources.yaml"] {
+            let Ok(text) = fs::read_to_string(path) else { continue };
+            let file: SourcesFile = serde_yaml::from_str(&text).expect(path);
+            assert!(!file.sources.is_empty(), "{path} has no sources");
+        }
     }
 }
