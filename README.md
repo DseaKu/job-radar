@@ -37,7 +37,7 @@ demo/run.sh              # about 1 minute
 The same demo runs on GitHub Actions on each change: open the latest
 [Demo run](https://github.com/DseaKu/job-radar/actions/workflows/demo.yml) and look at its
 summary for the result table with the reason for each score.
-To record the GIF again: `vhs demo/demo.tape`.
+To record the GIF again (needs `vhs` and `miller` from Homebrew): `vhs demo/demo.tape`.
 
 ## Run
 
