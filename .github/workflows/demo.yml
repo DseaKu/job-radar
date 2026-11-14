@@ -1,0 +1,71 @@
+name: Demo
+
+# End-to-end run with a real (small) LLM on the CI runner's CPU: no API key, no cost.
+# It serves two fictional job pages locally (demo/site) and scores the jobs against a
+# fictional CV (demo/demo_cv.txt). The result table appears in the run summary.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["src/**", "demo/**", "Cargo.*", ".github/workflows/demo.yml"]
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      ollama:
+        image: ollama/ollama:latest
+        ports: ["11434:11434"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Pull the model
+        run: |
+          MODEL=$(sed -n 's/^ *model: *\([^ ]*\).*/\1/p' demo/config.yaml)
+          echo "Model: $MODEL"
+          curl -fsS http://localhost:11434/api/pull -d "{\"model\": \"$MODEL\", \"stream\": false}"
+
+      - name: Run the demo
+        run: demo/run.sh
+
+      - name: Check the result
+        # Only the parts that do not depend on the model's wording.
+        run: |
+          python3 - <<'PY'
+          import csv, sys
+          rows = list(csv.DictReader(open("demo/result.csv", encoding="utf-8")))
+          companies = " ".join(r["company"] for r in rows)
+          assert len(rows) >= 4, f"expected at least 4 jobs, got {len(rows)}"
+          assert "Kessler" not in companies, "the ignore list did not remove Kessler Logistik"
+          assert all(r["match_score"] for r in rows), "a job has no match_score"
+          print(f"OK: {len(rows)} jobs, ignore list applied")
+          PY
+
+      - name: Write the summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import csv, os
+          if not os.path.exists("demo/result.csv"):
+              print("No result: see the log of the demo step.")
+              raise SystemExit
+          rows = list(csv.DictReader(open("demo/result.csv", encoding="utf-8")))
+          print("## job_radar demo result\n")
+          print("Fictional CV: `demo/demo_cv.txt` · pages: `demo/site/` · model: see `demo/config.yaml`\n")
+          print("| Score | Title | Company | Location | Why |")
+          print("|---:|---|---|---|---|")
+          cell = lambda s: s.replace("|", "\\|").replace("\n", " ")
+          for r in rows:
+              print(f"| {r['match_score']} | {cell(r['title'])} | {cell(r['company'])} "
+                    f"| {cell(r['location'])} | {cell(r['match_reason'])} |")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: demo-result
+          path: demo/result.csv
+          if-no-files-found: ignore

@@ -9,3 +9,4 @@ providers:
     model: qwen3:1.7b      # about 1.4 GB; small enough for a laptop or a CI runner
     context_length: 8192   # the demo pages are small; a small window is faster on a CPU
     max_tokens: 2048
+    temperature: 0         # the same reply for the same input, so the demo result is stable

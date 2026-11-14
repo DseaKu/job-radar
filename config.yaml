@@ -25,6 +25,8 @@ output_language: German
 #                  ollama: also sent as num_ctx. Ollama's own default is about 2048 and cuts
 #                  long prompts without an error. A larger window needs more memory
 #                  (qwen3:8b at 32768: about 10 GB).
+#   temperature  - sampling temperature; 0 gives the same reply for the same input
+#                  (default: the provider's own default)
 #
 # Types: ollama (local, no token), openai (any OpenAI-compatible API), anthropic (Claude).
 providers:

@@ -135,6 +135,9 @@ pub struct ProviderConfig {
     /// Ollama also gets it as `num_ctx`: Ollama's own default is small and cuts long prompts
     /// without an error.
     pub context_length: Option<u32>,
+    /// Sampling temperature. `0` gives the same reply for the same input (useful for demos and
+    /// tests). Without it, the provider's default is used.
+    pub temperature: Option<f32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -186,6 +189,7 @@ impl Default for Config {
             max_tokens: None,
             effort: None,
             context_length: None,
+            temperature: None,
         };
         Self {
             active: "local".to_string(),

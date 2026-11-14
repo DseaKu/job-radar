@@ -45,6 +45,7 @@ pub struct Backend {
     max_tokens: u32,
     effort: Option<String>,
     context_length: u32,
+    temperature: Option<f32>,
     /// Token totals over all calls of this run.
     total_in: AtomicU64,
     total_out: AtomicU64,
@@ -86,6 +87,7 @@ impl Backend {
             max_tokens: p.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
             effort: p.effort.clone(),
             context_length: p.context_length.unwrap_or(p.kind.default_context_length()),
+            temperature: p.temperature,
             total_in: AtomicU64::new(0),
             total_out: AtomicU64::new(0),
             calls: AtomicU64::new(0),
@@ -102,7 +104,7 @@ impl Backend {
     }
 
     async fn chat_ollama(&self, system: &str, user: &str) -> Res<String> {
-        let body = json!({
+        let mut body = json!({
             "model": self.model,
             "stream": false,
             // Thinking only when an effort is configured: it costs time and reply tokens.
@@ -116,6 +118,9 @@ impl Backend {
                 "num_predict": self.max_tokens,
             },
         });
+        if let Some(t) = self.temperature {
+            body["options"]["temperature"] = json!(t);
+        }
         let request = self
             .http
             .post(format!("{}/api/chat", self.base_url))
@@ -153,6 +158,9 @@ impl Backend {
         if let Some(effort) = &self.effort {
             body["reasoning_effort"] = json!(effort);
         }
+        if let Some(t) = self.temperature {
+            body["temperature"] = json!(t);
+        }
         let mut request = self
             .http
             .post(format!("{}/chat/completions", self.base_url))
@@ -184,6 +192,9 @@ impl Backend {
         });
         if let Some(effort) = &self.effort {
             body["output_config"] = json!({ "effort": effort });
+        }
+        if let Some(t) = self.temperature {
+            body["temperature"] = json!(t);
         }
         let mut request = self
             .http

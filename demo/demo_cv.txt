@@ -16,4 +16,3 @@ Skills
 - Tools: Linux, Git, Docker, CI with GitHub Actions
 
 Looking for: first full-time role in embedded or systems programming near Witten.
-Not interested in: sales roles.
