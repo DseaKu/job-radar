@@ -32,38 +32,54 @@ flowchart LR
     DUP -- no --> CSV["📊 jobs.csv<br/>best match first"]
 ```
 
-## Requirements
-
-| What | When |
-|---|---|
-| [Docker](https://www.docker.com/products/docker-desktop/) | Recommended way to run. Nothing else to install. |
-| [Rust](https://rustup.rs/) 1.88 or newer | Only to run or build without Docker. |
-| One model provider: [Ollama](https://ollama.com/) (local, free) **or** an Anthropic / OpenAI API key | Always. The default is Ollama with `qwen3:1.7b`. |
-
 ## Quick start
 
-The recommended way is Docker: no Rust, no dependencies, the same on Linux, macOS and Windows.
-Put your CV and your config files into one folder, then run:
+Two ways to run it. Both need a model: [Ollama](https://ollama.com/) on your computer
+(free, no account) or an API key for Anthropic or OpenAI.
 
-```sh
-docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt
-```
+### With Docker (recommended)
 
-The container reads `config.yaml`, `sources.yaml`, `ignore.yaml`, `.env` and your CV from the
-current folder, and writes `jobs.csv` back into it. Nothing is stored in the image.
-See [Docker](docs/docker.md) for Ollama, API keys and Linux (two more options).
+No Rust and no other dependencies. The same on Linux, macOS and Windows.
 
-Select the model in `config.yaml`. See [Providers](docs/providers.md).
+1. **Install Docker:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) on macOS and
+   Windows, Docker Engine on Linux.
+2. **Select a model:** install Ollama, then run `ollama pull qwen3:1.7b`.
+   Or put an API key into `.env` and select the provider in `config.yaml`
+   (see [Providers](docs/providers.md)).
+3. **Prepare a folder** with your CV (`cv.txt` or a PDF) and your search pages in `sources.yaml`
+   (template: [`sources.example.yaml`](sources.example.yaml)).
+4. **Run** in this folder:
 
-### Without Docker
+   ```sh
+   docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt
+   ```
 
-With a Rust toolchain:
+**Done:** `jobs.csv` is in your folder. Add `-v` at the end to see the progress and the best jobs.
+On Linux, add two more options: see [Docker](docs/docker.md).
 
-```sh
-cargo run --release -- --cv cv.txt
-```
+### With Rust
 
-Try the demo with a small local model (no API key, about 1 minute):
+1. **Install Rust** 1.88 or newer: [rustup.rs](https://rustup.rs/).
+2. **Select a model:** the same as step 2 above.
+3. **Get the code and add your search pages:**
+
+   ```sh
+   git clone https://github.com/DseaKu/job-radar && cd job-radar
+   cp sources.example.yaml sources.yaml
+   ```
+
+4. **Run:**
+
+   ```sh
+   cargo run --release -- --cv cv.txt
+   ```
+
+**Done:** `jobs.csv` is in the project folder.
+
+### Try the demo
+
+Two fictional job pages and a fictional CV, with no API key and no real job site.
+Needs Rust, Python 3 and Ollama. Takes about 1 minute.
 
 ```sh
 ollama pull qwen3:1.7b
