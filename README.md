@@ -4,6 +4,21 @@ Give it your CV and one or more career-page URLs.
 It downloads each page, asks an LLM to find the job postings, rates each job against your CV,
 and writes everything to a CSV file (best match first).
 
+```mermaid
+flowchart LR
+    CV["📄 CV<br/>text, PDF or clipboard"]
+    SRC["🌐 Career pages<br/>URLs or sources.yaml"]
+
+    SRC --> FETCH["Download page<br/>split into parts"]
+    FETCH --> LLM
+    CV --> LLM["🤖 LLM<br/>find jobs + rate vs. CV"]
+
+    LLM --> IGN["Ignore list<br/>ignore.yaml"]
+    IGN --> DUP{"--kill-dups?"}
+    DUP -- yes --> DEDUP["🤖 LLM<br/>merge duplicates"] --> CSV
+    DUP -- no --> CSV["📊 jobs.csv<br/>best match first"]
+```
+
 ## Run
 
 ```sh

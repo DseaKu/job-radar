@@ -1,0 +1,4 @@
+# Demo ignore list: the candidate already applied to this company.
+ignore:
+  - company: Kessler Logistik
+    note: applied 2026-11-01

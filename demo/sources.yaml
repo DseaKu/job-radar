@@ -1,0 +1,9 @@
+# Demo sources: two fictional pages, served locally by demo/run.sh.
+port: 8765
+
+sources:
+  - name: Nordlicht Robotics (careers page)
+    url: http://127.0.0.1:{{ port }}/nordlicht-careers.html
+
+  - name: RuhrJobs (job board)
+    url: http://127.0.0.1:{{ port }}/jobboard.html

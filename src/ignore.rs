@@ -60,7 +60,10 @@ fn contains_at_word_start(hay: &str, needle: &str) -> bool {
         return false;
     }
     hay.match_indices(&needle).any(|(i, _)| {
-        !hay[..i].chars().next_back().is_some_and(char::is_alphanumeric)
+        !hay[..i]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_alphanumeric)
     })
 }
 
@@ -92,7 +95,10 @@ fn parse(text: &str) -> Res<Vec<Rule>> {
         return Ok(Vec::new());
     }
     // Simple format: one company name on each line (a leading "- " is also accepted).
-    if !matches!(serde_yaml::from_str(text), Ok(serde_yaml::Value::Mapping(_))) {
+    if !matches!(
+        serde_yaml::from_str(text),
+        Ok(serde_yaml::Value::Mapping(_))
+    ) {
         return Ok(text
             .lines()
             .map(|l| l.trim())

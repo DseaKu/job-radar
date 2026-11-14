@@ -166,15 +166,17 @@ pub async fn from_url(
             }
         }
     }
-    if rows.is_empty() {
-        if let Some(e) = last_error {
-            return Err(format!("{url}: {e}").into());
-        }
+    if rows.is_empty()
+        && let Some(e) = last_error
+    {
+        return Err(format!("{url}: {e}").into());
     }
     Ok(merge_overlap(rows))
 }
 
 fn to_row(job: &Value, source: &str) -> JobRow {
+    let (title, link) = split_link(&field(job, "title"));
+    let url = field(job, "url");
     JobRow {
         match_score: job["match_score"]
             .as_i64()
@@ -184,14 +186,28 @@ fn to_row(job: &Value, source: &str) -> JobRow {
                     .as_str()
                     .and_then(|s| s.trim().parse().ok())
             }),
-        title: field(job, "title"),
+        title,
         company: field(job, "company"),
         location: field(job, "location"),
         description: field(job, "description"),
         match_reason: field(job, "match_reason"),
-        url: field(job, "url"),
+        url: if url.is_empty() { link } else { url },
         source: source.to_string(),
     }
+}
+
+/// Page links appear as "text (url)", and small models often copy the link into the title.
+/// Returns the title without a link at its end, and that link (or "").
+fn split_link(title: &str) -> (String, String) {
+    if let Some(start) = title.rfind(" (")
+        && title.ends_with(')')
+    {
+        let link = &title[start + 2..title.len() - 1];
+        if link.starts_with("http://") || link.starts_with("https://") {
+            return (title[..start].trim_end().to_string(), link.to_string());
+        }
+    }
+    (title.to_string(), String::new())
 }
 
 /// Splits the text into parts of at most `size` bytes. Each part starts `overlap` bytes before
@@ -365,6 +381,18 @@ mod tests {
         let items = parse_partial_array(reply);
         assert_eq!(items.len(), 2);
         assert_eq!(field(&items[1], "title"), "B");
+    }
+
+    #[test]
+    fn removes_link_from_title() {
+        let job: Value = serde_json::from_str(
+            r#"{"title": "Rust Dev (m/w/d) (https://a.de/jobs/1)", "url": ""}"#,
+        )
+        .unwrap();
+        let row = to_row(&job, "src");
+        assert_eq!(row.title, "Rust Dev (m/w/d)");
+        assert_eq!(row.url, "https://a.de/jobs/1");
+        assert_eq!(split_link("Dev (m/w/d)").0, "Dev (m/w/d)");
     }
 
     #[test]

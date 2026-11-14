@@ -1,0 +1,11 @@
+# Demo settings: a small local model, so the demo runs on a laptop or a CI runner
+# without an API key. Used by demo/run.sh.
+active: demo
+output_language: English
+
+providers:
+  demo:
+    type: ollama
+    model: qwen3:1.7b      # about 1.4 GB; small enough for a laptop or a CI runner
+    context_length: 8192   # the demo pages are small; a small window is faster on a CPU
+    max_tokens: 2048

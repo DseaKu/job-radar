@@ -1,0 +1,19 @@
+Alex Beispiel (fictional candidate for the job_radar demo)
+Location: Witten, Germany
+
+Education
+- B.Sc. Computer Engineering, Ruhr University Bochum, 2026
+- Thesis: Real-time motor control on ARM Cortex-M with Rust
+
+Experience
+- Working student, embedded software (2 years): firmware in C and Rust for sensor boards,
+  CAN bus, FreeRTOS, hardware bring-up with oscilloscope and logic analyzer
+- Student project: ESP32 weather station with MQTT and a small Python dashboard
+
+Skills
+- Languages: Rust, C, C++, Python
+- Embedded: ARM Cortex-M, ESP32, embassy, FreeRTOS, CAN, SPI, I2C
+- Tools: Linux, Git, Docker, CI with GitHub Actions
+
+Looking for: first full-time role in embedded or systems programming near Witten.
+Not interested in: sales roles.
