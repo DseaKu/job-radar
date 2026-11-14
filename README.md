@@ -7,6 +7,14 @@ An LLM finds the job postings, rates each job against your CV, and writes a CSV 
 
 ![job_radar demo: a CV and two career pages in, a ranked job list out](demo/demo.gif)
 
+### The result
+
+Each job gets a score from 0 to 100 and a short reason. Example with fictional data:
+
+![Example result: jobs.csv as a table with score, title, company, location and the reason for each score](docs/images/example-result.svg)
+
+### How it works
+
 ```mermaid
 flowchart LR
     CV["📄 CV<br/>text, PDF or clipboard"]
@@ -67,8 +75,6 @@ demo/run.sh
 | *(no URLs)* | Reads the URLs from `sources.yaml`. |
 
 CSV columns: `match_score, title, company, location, description, match_reason, url, source`.
-
-![Example result: jobs.csv as a table with score, title, company, location and the reason for each score](docs/images/example-result.svg)
 
 ## Limitations
 
