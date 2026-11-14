@@ -266,16 +266,51 @@ fn merge_overlap(rows: Vec<JobRow>) -> Vec<JobRow> {
     out
 }
 
-/// Writes the rows to a CSV file, best match first.
-pub fn write_csv(path: &str, mut rows: Vec<JobRow>) -> Res<()> {
+/// Sorts the rows (best match first) and writes them to a CSV file.
+pub fn write_csv(path: &str, rows: &mut [JobRow]) -> Res<()> {
     rows.sort_by_key(|r| std::cmp::Reverse(r.match_score.unwrap_or(-1)));
     let mut writer =
         csv::Writer::from_path(path).map_err(|e| format!("cannot write {path}: {e}"))?;
-    for row in rows {
+    for row in rows.iter() {
         writer.serialize(row)?;
     }
     writer.flush()?;
     Ok(())
+}
+
+/// A short text table of the first `max` rows: score, title, company and location.
+/// Long values are cut, so that a line fits into a normal terminal.
+pub fn table(rows: &[JobRow], max: usize) -> String {
+    fn cut(s: &str, max: usize) -> String {
+        if s.chars().count() <= max {
+            s.to_string()
+        } else {
+            format!("{}…", s.chars().take(max - 1).collect::<String>())
+        }
+    }
+    let shown = &rows[..rows.len().min(max)];
+    let cells: Vec<[String; 3]> = shown
+        .iter()
+        .map(|r| [cut(&r.title, 42), cut(&r.company, 26), cut(&r.location, 32)])
+        .collect();
+    // The title and company columns are as wide as their longest value.
+    let width = |i: usize, head: &str| {
+        cells
+            .iter()
+            .map(|c| c[i].chars().count())
+            .fold(head.len(), usize::max)
+    };
+    let (wt, wc) = (width(0, "title"), width(1, "company"));
+
+    let mut out = format!("score  {:<wt$}  {:<wc$}  location\n", "title", "company");
+    for (r, [title, company, location]) in shown.iter().zip(&cells) {
+        let score = r.match_score.map_or("-".to_string(), |s| s.to_string());
+        out += &format!("{score:>5}  {title:<wt$}  {company:<wc$}  {location}\n");
+    }
+    if rows.len() > shown.len() {
+        out += &format!("  ... {} more in the CSV file\n", rows.len() - shown.len());
+    }
+    out
 }
 
 fn field(job: &Value, key: &str) -> String {
@@ -393,6 +428,36 @@ mod tests {
         assert_eq!(row.title, "Rust Dev (m/w/d)");
         assert_eq!(row.url, "https://a.de/jobs/1");
         assert_eq!(split_link("Dev (m/w/d)").0, "Dev (m/w/d)");
+    }
+
+    #[test]
+    fn table_aligns_and_cuts() {
+        let row = |score, title: &str, company: &str| JobRow {
+            match_score: Some(score),
+            title: title.into(),
+            company: company.into(),
+            location: "Bochum · Hybrid".into(),
+            description: String::new(),
+            match_reason: String::new(),
+            url: String::new(),
+            source: String::new(),
+        };
+        let rows = vec![
+            row(90, "Rust Developer", "Nordlicht Robotics"),
+            row(40, &"Very long title ".repeat(5), "Ä GmbH"),
+            row(10, "Third", "X"),
+        ];
+        let text = table(&rows, 2);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 4);
+        assert!(lines[0].starts_with("score  title"));
+        assert!(lines[1].starts_with("   90  Rust Developer"));
+        assert!(lines[2].contains('…'));
+        // The company column starts at the same character position in each line.
+        let col = |l: &str, word: &str| l[..l.find(word).unwrap()].chars().count();
+        assert_eq!(col(lines[0], "company"), col(lines[1], "Nordlicht"));
+        assert_eq!(col(lines[0], "company"), col(lines[2], "Ä GmbH"));
+        assert_eq!(lines[3], "  ... 1 more in the CSV file");
     }
 
     #[test]

@@ -25,12 +25,3 @@ AGENTS_CONFIG=demo/config.yaml \
 JOB_RADAR_SOURCES=demo/sources.yaml \
 JOB_RADAR_IGNORE=demo/ignore.yaml \
   cargo run --release --quiet -- --cv demo/demo_cv.txt --out "$OUT"
-
-# Short table of the result (the CSV has more columns: description, match_reason, url).
-python3 - "$OUT" <<'PY'
-import csv, sys
-rows = list(csv.DictReader(open(sys.argv[1], encoding="utf-8")))
-print(f"\n{'score':>5}  {'title':<42} {'company':<26} location")
-for r in rows:
-    print(f"{r['match_score']:>5}  {r['title'][:42]:<42} {r['company'][:26]:<26} {r['location']}")
-PY

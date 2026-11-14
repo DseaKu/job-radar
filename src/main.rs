@@ -12,6 +12,9 @@ use std::time::Duration;
 use backend::Backend;
 use config::Config;
 
+/// How many of the best jobs the summary table at the end of a run shows.
+const TABLE_ROWS: usize = 10;
+
 pub type Res<T> = Result<T, Box<dyn std::error::Error>>;
 
 #[tokio::main]
@@ -99,10 +102,12 @@ async fn main() -> Res<()> {
         }
     }
 
-    let count = rows.len();
-    jobs::write_csv(&args.out, rows)?;
-    eprintln!("Wrote {count} jobs to {}", args.out);
+    jobs::write_csv(&args.out, &mut rows)?;
+    eprintln!("Wrote {} jobs to {}", rows.len(), args.out);
     eprintln!("{}", backend.usage_summary());
+    if !rows.is_empty() {
+        print!("\n{}", jobs::table(&rows, TABLE_ROWS));
+    }
 
     if failed == targets.len() {
         return Err("all URLs failed".into());
