@@ -2,7 +2,7 @@
 .env
 *pdf
 cv*
-jobs.csv
+*.csv
 
 # Private search pages (template: sources.example.yaml)
 sources.yaml

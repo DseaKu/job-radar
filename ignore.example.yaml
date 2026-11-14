@@ -8,9 +8,19 @@
 # An entry matches a job if ALL the fields that it gives match:
 #   url      - the same job link (copy it from the `url` column of the CSV).
 #              Case, a trailing "/" and a "#fragment" do not count.
-#   company  - this text is in the company name (case does not count)
-#   title    - this text is in the job title (case does not count)
+#   company  - this text is in the company name
+#   title    - this text is in the job title
+#              For company and title, case does not count, and the text must be at the
+#              start of a word: "its" matches "ITS GmbH" but not "Schwarz Digits",
+#              "polizei" matches "Polizeipräsidium Essen".
 #   note     - free text for you; the tool does not use it
+#
+# Simple format: instead of the `ignore:` list below, write only company names,
+# one on each line (no `ignore:` key):
+#
+#   bechtle
+#   ferchau
+#   polizei
 #
 # Tip: the same job can have a different link on each platform.
 # Use company + title to ignore it on all platforms.

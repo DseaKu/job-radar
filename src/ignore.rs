@@ -19,6 +19,8 @@ struct IgnoreFile {
 /// One entry. A job matches if it matches all the fields that the entry gives.
 /// - `url`: the same job link (case, a trailing `/` and a `#fragment` do not count).
 /// - `company`, `title`: the text is in the job's company or title (case does not count).
+///   It must start at the start of a word: `its` matches "ITS GmbH", but not "Digits GmbH";
+///   `polizei` matches "Polizeipräsidium".
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Rule {
@@ -32,8 +34,7 @@ pub struct Rule {
 
 impl Rule {
     fn matches(&self, row: &JobRow) -> bool {
-        let contains =
-            |hay: &str, needle: &str| hay.to_lowercase().contains(&needle.trim().to_lowercase());
+        let contains = |hay: &str, needle: &str| contains_at_word_start(hay, needle);
         self.url
             .as_ref()
             .is_none_or(|u| !row.url.is_empty() && norm_url(u) == norm_url(&row.url))
@@ -49,6 +50,18 @@ impl Rule {
             .iter()
             .all(|f| f.as_deref().is_none_or(|s| s.trim().is_empty()))
     }
+}
+
+/// True if `needle` is in `hay` (case does not count) and starts at the start of a word.
+fn contains_at_word_start(hay: &str, needle: &str) -> bool {
+    let hay = hay.to_lowercase();
+    let needle = needle.trim().to_lowercase();
+    if needle.is_empty() {
+        return false;
+    }
+    hay.match_indices(&needle).any(|(i, _)| {
+        !hay[..i].chars().next_back().is_some_and(char::is_alphanumeric)
+    })
 }
 
 fn norm_url(url: &str) -> String {
@@ -77,6 +90,20 @@ fn parse(text: &str) -> Res<Vec<Rule>> {
         .all(|l| l.trim().is_empty() || l.trim_start().starts_with('#'))
     {
         return Ok(Vec::new());
+    }
+    // Simple format: one company name on each line (a leading "- " is also accepted).
+    if !matches!(serde_yaml::from_str(text), Ok(serde_yaml::Value::Mapping(_))) {
+        return Ok(text
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(|l| Rule {
+                url: None,
+                company: Some(l.trim_start_matches("- ").trim().to_string()),
+                title: None,
+                note: None,
+            })
+            .collect());
     }
     let file: IgnoreFile = serde_yaml::from_str(text)?;
     if let Some(i) = file.ignore.iter().position(Rule::is_empty) {
@@ -128,6 +155,23 @@ mod tests {
         assert_eq!(apply(&mut rows, &rules), 3);
         let left: Vec<_> = rows.iter().map(|r| r.company.as_str()).collect();
         assert_eq!(left, ["AHE GmbH", "Y"]);
+    }
+
+    #[test]
+    fn simple_format_is_company_names() {
+        let rules = parse("ahe\n# comment\n\n- its\nbrunel\npolizei\n").unwrap();
+        assert_eq!(rules.len(), 4);
+        let mut rows = vec![
+            row("Dev", "AHE GmbH", ""),
+            row("Dev", "ITS Ingenieurbüro", ""),
+            row("Dev", "Schwarz Digits", ""),
+            row("Dev", "Polizeipräsidium Essen", ""),
+            row("Dev", "Brunel GmbH NL Essen", ""),
+            row("Its Dev", "Other", ""),
+        ];
+        assert_eq!(apply(&mut rows, &rules), 4);
+        let left: Vec<_> = rows.iter().map(|r| r.company.as_str()).collect();
+        assert_eq!(left, ["Schwarz Digits", "Other"]);
     }
 
     #[test]

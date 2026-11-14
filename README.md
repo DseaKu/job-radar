@@ -85,8 +85,11 @@ cp ignore.example.yaml ignore.yaml
 
 Each entry has one or more of `url`, `company` and `title`. A job is ignored if all given
 fields match. `url` must be the same link. `company` and `title` match if the text is part of
-the value (case does not count). The same job has a different link on each platform, so
+the value at the start of a word (case does not count): `polizei` matches `Polizeipräsidium`,
+but `its` does not match `Schwarz Digits`. The same job has a different link on each platform, so
 use `company` + `title` to ignore it everywhere. The optional `note` field is for you.
+
+Simple format: write only company names, one on each line, without the `ignore:` key.
 
 The ignored jobs are removed after the AI read the pages, so they still cost tokens.
 To use another file, set `JOB_RADAR_IGNORE=<path>`.
