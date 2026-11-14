@@ -68,6 +68,8 @@ demo/run.sh
 
 CSV columns: `match_score, title, company, location, description, match_reason, url, source`.
 
+![Example result: jobs.csv as a table with score, title, company, location and the reason for each score](docs/images/example-result.svg)
+
 ## Limitations
 
 - Pages that build their job list with JavaScript return no jobs (for example LinkedIn,

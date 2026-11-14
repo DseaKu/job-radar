@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="752" viewBox="0 0 1240 752" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<rect x="0.5" y="0.5" width="1239" height="751" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+<circle cx="26" cy="26" r="6" fill="#ff5f57"/><circle cx="46" cy="26" r="6" fill="#febc2e"/><circle cx="66" cy="26" r="6" fill="#28c840"/>
+<text x="620" y="31" text-anchor="middle" font-size="13" fill="#59636e">jobs.csv — 9 jobs, best match first</text>
+<line x1="1" y1="52" x2="1239" y2="52" stroke="#d0d7de"/>
+<text x="24" y="78" font-size="12.5" fill="#59636e">Example output with fictional data. The CSV also has the columns description, url and source.</text>
+<rect x="1" y="92" width="1238" height="40" fill="#eef1f4"/>
+<text x="24" y="117" font-size="12.5" font-weight="700" fill="#1f2328" letter-spacing="0.3">SCORE</text><text x="96" y="117" font-size="12.5" font-weight="700" fill="#1f2328" letter-spacing="0.3">TITLE</text><text x="372" y="117" font-size="12.5" font-weight="700" fill="#1f2328" letter-spacing="0.3">COMPANY</text><text x="568" y="117" font-size="12.5" font-weight="700" fill="#1f2328" letter-spacing="0.3">LOCATION</text><text x="748" y="117" font-size="12.5" font-weight="700" fill="#1f2328" letter-spacing="0.3">WHY THIS SCORE</text>
+<line x1="1" y1="132" x2="1239" y2="132" stroke="#d8dee4"/>
+<rect x="24" y="144" width="46" height="24" rx="12" fill="#dafbe1"/><text x="47" y="161" text-anchor="middle" font-weight="700" font-size="13" fill="#1a7f37">92</text>
+<text x="96" y="160" font-size="13.5" fill="#1f2328" font-weight="600">Embedded Rust Developer</text>
+<text x="96" y="178" font-size="13.5" fill="#1f2328" font-weight="600">(m/w/d)</text>
+<text x="372" y="160" font-size="13.5" fill="#1f2328">Nordlicht Robotics</text>
+<text x="372" y="178" font-size="13.5" fill="#1f2328">GmbH</text>
+<text x="568" y="160" font-size="13.5" fill="#59636e">Bochum (12 km),</text>
+<text x="568" y="178" font-size="13.5" fill="#59636e">Hybrid</text>
+<text x="748" y="160" font-size="13.5" fill="#59636e">Rust, ARM Cortex-M and CAN experience from the working-student role</text>
+<text x="748" y="178" font-size="13.5" fill="#59636e">and the thesis match the core of the role.</text>
+<rect x="1" y="196" width="1238" height="64" fill="#f6f8fa"/>
+<line x1="1" y1="196" x2="1239" y2="196" stroke="#d8dee4"/>
+<rect x="24" y="208" width="46" height="24" rx="12" fill="#dafbe1"/><text x="47" y="225" text-anchor="middle" font-weight="700" font-size="13" fill="#1a7f37">86</text>
+<text x="96" y="224" font-size="13.5" fill="#1f2328" font-weight="600">Firmware Engineer C (m/w/d)</text>
+<text x="372" y="224" font-size="13.5" fill="#1f2328">Ruhrtal Sensorik GmbH</text>
+<text x="568" y="224" font-size="13.5" fill="#59636e">Hagen (15 km),</text>
+<text x="568" y="242" font-size="13.5" fill="#59636e">Hybrid</text>
+<text x="748" y="224" font-size="13.5" fill="#59636e">Strong match for C, I2C/SPI and hardware bring-up; the sensor domain</text>
+<text x="748" y="242" font-size="13.5" fill="#59636e">is new but close to the ESP32 projects.</text>
+<line x1="1" y1="260" x2="1239" y2="260" stroke="#d8dee4"/>
+<rect x="24" y="272" width="46" height="24" rx="12" fill="#dafbe1"/><text x="47" y="289" text-anchor="middle" font-weight="700" font-size="13" fill="#1a7f37">81</text>
+<text x="96" y="288" font-size="13.5" fill="#1f2328" font-weight="600">Junior Software Engineer C/C++</text>
+<text x="96" y="306" font-size="13.5" fill="#1f2328" font-weight="600">(m/w/d)</text>
+<text x="372" y="288" font-size="13.5" fill="#1f2328">Ruhrbyte Software GmbH</text>
+<text x="568" y="288" font-size="13.5" fill="#59636e">Witten</text>
+<text x="748" y="288" font-size="13.5" fill="#59636e">Entry-level role in the home town with C, C++, Linux and Git, all</text>
+<text x="748" y="306" font-size="13.5" fill="#59636e">listed in the CV.</text>
+<rect x="1" y="324" width="1238" height="64" fill="#f6f8fa"/>
+<line x1="1" y1="324" x2="1239" y2="324" stroke="#d8dee4"/>
+<rect x="24" y="336" width="46" height="24" rx="12" fill="#fff8c5"/><text x="47" y="353" text-anchor="middle" font-weight="700" font-size="13" fill="#9a6700">74</text>
+<text x="96" y="352" font-size="13.5" fill="#1f2328" font-weight="600">Working Student IoT Platform</text>
+<text x="96" y="370" font-size="13.5" fill="#1f2328" font-weight="600">(m/w/d)</text>
+<text x="372" y="352" font-size="13.5" fill="#1f2328">Kettenwerk Digital</text>
+<text x="372" y="370" font-size="13.5" fill="#1f2328">GmbH</text>
+<text x="568" y="352" font-size="13.5" fill="#59636e">Dortmund (18 km),</text>
+<text x="568" y="370" font-size="13.5" fill="#59636e">Remote possible</text>
+<text x="748" y="352" font-size="13.5" fill="#59636e">MQTT, Python and Docker match the ESP32 weather-station project; a</text>
+<text x="748" y="370" font-size="13.5" fill="#59636e">working-student role fits the current status.</text>
+<line x1="1" y1="388" x2="1239" y2="388" stroke="#d8dee4"/>
+<rect x="24" y="400" width="46" height="24" rx="12" fill="#fff8c5"/><text x="47" y="417" text-anchor="middle" font-weight="700" font-size="13" fill="#9a6700">68</text>
+<text x="96" y="416" font-size="13.5" fill="#1f2328" font-weight="600">Software Developer Automotive</text>
+<text x="96" y="434" font-size="13.5" fill="#1f2328" font-weight="600">Testing (m/w/d)</text>
+<text x="372" y="416" font-size="13.5" fill="#1f2328">Vektor Prüftechnik AG</text>
+<text x="568" y="416" font-size="13.5" fill="#59636e">Essen (22 km)</text>
+<text x="748" y="416" font-size="13.5" fill="#59636e">CAN and Python fit well; automotive testing is a new domain and the</text>
+<text x="748" y="434" font-size="13.5" fill="#59636e">role asks for 2 years of experience.</text>
+<rect x="1" y="452" width="1238" height="64" fill="#f6f8fa"/>
+<line x1="1" y1="452" x2="1239" y2="452" stroke="#d8dee4"/>
+<rect x="24" y="464" width="46" height="24" rx="12" fill="#fff8c5"/><text x="47" y="481" text-anchor="middle" font-weight="700" font-size="13" fill="#9a6700">55</text>
+<text x="96" y="480" font-size="13.5" fill="#1f2328" font-weight="600">Backend Developer Python</text>
+<text x="96" y="498" font-size="13.5" fill="#1f2328" font-weight="600">(m/w/d)</text>
+<text x="372" y="480" font-size="13.5" fill="#1f2328">Nordlicht Robotics</text>
+<text x="372" y="498" font-size="13.5" fill="#1f2328">GmbH</text>
+<text x="568" y="480" font-size="13.5" fill="#59636e">Bochum (12 km)</text>
+<text x="748" y="480" font-size="13.5" fill="#59636e">Python is in the CV, but backend frameworks and the required 3 years</text>
+<text x="748" y="498" font-size="13.5" fill="#59636e">of experience are missing.</text>
+<line x1="1" y1="516" x2="1239" y2="516" stroke="#d8dee4"/>
+<rect x="24" y="528" width="46" height="24" rx="12" fill="#ffebe9"/><text x="47" y="545" text-anchor="middle" font-weight="700" font-size="13" fill="#cf222e">42</text>
+<text x="96" y="544" font-size="13.5" fill="#1f2328" font-weight="600">DevOps Engineer Kubernetes</text>
+<text x="96" y="562" font-size="13.5" fill="#1f2328" font-weight="600">(m/w/d)</text>
+<text x="372" y="544" font-size="13.5" fill="#1f2328">Wolkenhafen Cloud GmbH</text>
+<text x="568" y="544" font-size="13.5" fill="#59636e">Dortmund (18 km),</text>
+<text x="568" y="562" font-size="13.5" fill="#59636e">Hybrid</text>
+<text x="748" y="544" font-size="13.5" fill="#59636e">Docker and CI appear in the CV, but Kubernetes, Terraform and cloud</text>
+<text x="748" y="562" font-size="13.5" fill="#59636e">operations are not covered.</text>
+<rect x="1" y="580" width="1238" height="64" fill="#f6f8fa"/>
+<line x1="1" y1="580" x2="1239" y2="580" stroke="#d8dee4"/>
+<rect x="24" y="592" width="46" height="24" rx="12" fill="#ffebe9"/><text x="47" y="609" text-anchor="middle" font-weight="700" font-size="13" fill="#cf222e">30</text>
+<text x="96" y="608" font-size="13.5" fill="#1f2328" font-weight="600">Data Analyst Marketing (m/w/d)</text>
+<text x="372" y="608" font-size="13.5" fill="#1f2328">Fernweh Media GmbH</text>
+<text x="568" y="608" font-size="13.5" fill="#59636e">Essen (22 km),</text>
+<text x="568" y="626" font-size="13.5" fill="#59636e">Remote possible</text>
+<text x="748" y="608" font-size="13.5" fill="#59636e">Little overlap: the CV focuses on embedded systems, not on marketing</text>
+<text x="748" y="626" font-size="13.5" fill="#59636e">analytics or BI tools.</text>
+<line x1="1" y1="644" x2="1239" y2="644" stroke="#d8dee4"/>
+<rect x="24" y="656" width="46" height="24" rx="12" fill="#ffebe9"/><text x="47" y="673" text-anchor="middle" font-weight="700" font-size="13" fill="#cf222e">18</text>
+<text x="96" y="672" font-size="13.5" fill="#1f2328" font-weight="600">Senior Cloud Architect AWS</text>
+<text x="96" y="690" font-size="13.5" fill="#1f2328" font-weight="600">(m/w/d)</text>
+<text x="372" y="672" font-size="13.5" fill="#1f2328">Nordlicht Robotics</text>
+<text x="372" y="690" font-size="13.5" fill="#1f2328">GmbH</text>
+<text x="568" y="672" font-size="13.5" fill="#59636e">Munich</text>
+<text x="748" y="672" font-size="13.5" fill="#59636e">Senior level, leadership experience and the location Munich do not</text>
+<text x="748" y="690" font-size="13.5" fill="#59636e">fit a graduate who looks for a role near Witten.</text>
+<line x1="1" y1="708" x2="1239" y2="708" stroke="#d8dee4"/>
+<g font-size="12" fill="#59636e">
+<rect x="24" y="723" width="12" height="12" rx="6" fill="#dafbe1" stroke="#1a7f37"/><text x="42" y="733">75–100 good match</text>
+<rect x="190" y="723" width="12" height="12" rx="6" fill="#fff8c5" stroke="#9a6700"/><text x="208" y="733">50–74 partial match</text>
+<rect x="360" y="723" width="12" height="12" rx="6" fill="#ffebe9" stroke="#cf222e"/><text x="378" y="733">0–49 poor match</text>
+</g>
+</svg>
