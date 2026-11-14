@@ -24,4 +24,4 @@ done
 AGENTS_CONFIG=demo/config.yaml \
 JOB_RADAR_SOURCES=demo/sources.yaml \
 JOB_RADAR_IGNORE=demo/ignore.yaml \
-  cargo run --release --quiet -- --cv demo/demo_cv.txt --out "$OUT"
+  cargo run --release --quiet -- --cv demo/demo_cv.txt --out "$OUT" -v

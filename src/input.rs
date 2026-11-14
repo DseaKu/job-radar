@@ -9,16 +9,19 @@ pub struct Args {
     pub urls: Vec<String>,
     pub out: String,
     pub kill_dups: bool,
+    pub verbose: bool,
 }
 
 const USAGE: &str = "\
-Usage: job_radar [--cv <cv.txt|cv.pdf>] [--out <jobs.csv>] [--kill-dups] [<url> ...]
+Usage: job_radar [--cv <cv.txt|cv.pdf>] [--out <jobs.csv>] [--kill-dups] [-v] [<url> ...]
        job_radar convert-cv <cv.pdf> [<cv.txt>]
        job_radar page-text <url>
 
 Without URLs, the enabled sources in sources.yaml are read.
 `page-text` prints the text the AI would see (no AI call), to test a new source.
 `--kill-dups` makes one more AI call that merges the same job found on several platforms.
+`-v`, `--verbose` shows the progress, the token usage and a table of the best jobs.
+Without it, only warnings, errors and the result line are shown.
 
 The CV comes from --cv, or from stdin if no --cv is given:
   pbpaste | job_radar https://example.com/careers
@@ -30,6 +33,7 @@ pub fn parse_args() -> Res<Args> {
     let mut out = "jobs.csv".to_string();
     let mut urls = Vec::new();
     let mut kill_dups = false;
+    let mut verbose = false;
 
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -37,6 +41,7 @@ pub fn parse_args() -> Res<Args> {
             "--cv" => cv_path = Some(args.next().ok_or("--cv needs a file path")?),
             "--out" | "-o" => out = args.next().ok_or("--out needs a file path")?,
             "--kill-dups" => kill_dups = true,
+            "-v" | "--verbose" => verbose = true,
             "-h" | "--help" | "help" => print_usage_and_exit(),
             _ if arg.starts_with('-') => return Err(format!("unknown option: {arg}").into()),
             _ => urls.push(arg),
@@ -57,6 +62,7 @@ pub fn parse_args() -> Res<Args> {
         urls,
         out,
         kill_dups,
+        verbose,
     })
 }
 

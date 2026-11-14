@@ -59,6 +59,7 @@ demo/run.sh
 | `--cv <file>` | CV as text or PDF. Without it, the CV comes from stdin (`pbpaste \| docker run -i …`). |
 | `--out <file>` | Output CSV (default `jobs.csv`). |
 | `--kill-dups` | One more LLM call that merges the same job from different platforms. |
+| `-v`, `--verbose` | Shows the progress, the token usage and a table of the 10 best jobs. Without it, only warnings, errors and the result line appear. |
 | `convert-cv <pdf>` | Converts a PDF CV to `cv.txt` once. |
 | `page-text <url>` | Shows the page text without an LLM call. Use it to test a new source. |
 | *(no URLs)* | Reads the URLs from `sources.yaml`. |

@@ -256,7 +256,7 @@ impl Backend {
         self.total_in.fetch_add(input, Ordering::Relaxed);
         self.total_out.fetch_add(output, Ordering::Relaxed);
         self.calls.fetch_add(1, Ordering::Relaxed);
-        eprintln!("  usage: {input} input tokens, {output} output tokens");
+        info!("  usage: {input} input tokens, {output} output tokens");
     }
 
     /// How many characters of page text fit into the context window, after the reply

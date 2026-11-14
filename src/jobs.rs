@@ -84,7 +84,7 @@ pub async fn from_url(
         chunks.truncate(MAX_CHUNKS);
     }
     if chunks.len() > 1 {
-        eprintln!(
+        info!(
             "  page too big ({} chars), begin slicing into {} slices; \
              beware: a job at a slice boundary can be lost",
             text.len(),
@@ -103,7 +103,7 @@ pub async fn from_url(
     let mut last_error = None;
     while let Some((label, chunk)) = queue.pop_front() {
         if sliced || label.contains('.') {
-            eprintln!("    read slice {label} ...");
+            info!("    read slice {label} ...");
         }
         let reply = match backend.chat(&system, &format!("{head}{chunk}")).await {
             Ok(r) => r,
@@ -119,7 +119,7 @@ pub async fn from_url(
                         let halves = split_chunks(chunk, chunk.len() * 55 / 100, chunk.len() / 20);
                         let names: Vec<String> =
                             (1..=halves.len()).map(|n| format!("{label}.{n}")).collect();
-                        eprintln!(
+                        info!(
                             "    reply too long ({} jobs before the cut), split slice {label} into {}",
                             saved.len(),
                             names.join(", ")

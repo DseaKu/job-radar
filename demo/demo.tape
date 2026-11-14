@@ -40,7 +40,7 @@ Sleep 200ms
 Enter
 Sleep 2.5s
 
-Type `docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv demo_cv.txt`
+Type `docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv demo_cv.txt -v`
 Sleep 200ms
 Enter
 Wait+Screen@120s /Total usage/

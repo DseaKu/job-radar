@@ -1,3 +1,21 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Set by `-v` / `--verbose`. Without it, only warnings, errors and the result line are shown.
+static VERBOSE: AtomicBool = AtomicBool::new(false);
+
+pub fn verbose() -> bool {
+    VERBOSE.load(Ordering::Relaxed)
+}
+
+/// Progress message: printed to stderr only with `-v` / `--verbose`.
+macro_rules! info {
+    ($($arg:tt)*) => {
+        if $crate::verbose() {
+            eprintln!($($arg)*);
+        }
+    };
+}
+
 mod backend;
 mod config;
 mod cv;
@@ -43,6 +61,7 @@ async fn main() -> Res<()> {
     }
 
     let args = input::parse_args()?;
+    VERBOSE.store(args.verbose, Ordering::Relaxed);
     let config = Config::load()?;
     let ignore_rules = ignore::load()?;
 
@@ -63,19 +82,23 @@ async fn main() -> Res<()> {
     }
 
     let backend = Backend::from_config(&config)?;
-    eprintln!("Using backend: {}", backend.describe());
+    info!("Using backend: {}", backend.describe());
 
     let mut rows = Vec::new();
     let mut failed = 0;
     for (name, url) in &targets {
-        eprintln!("Reading {name} ...");
+        info!("Reading {name} ...");
         match jobs::from_url(&backend, &http, &args.cv, url, &config.output_language).await {
             Ok(found) => {
-                eprintln!("  {} jobs found", found.len());
+                info!("  {} jobs found", found.len());
                 rows.extend(found);
             }
             Err(e) => {
-                eprintln!("  error: {e}");
+                if verbose() {
+                    eprintln!("  error: {e}");
+                } else {
+                    eprintln!("error: {name}: {e}");
+                }
                 failed += 1;
             }
         }
@@ -84,19 +107,19 @@ async fn main() -> Res<()> {
     // Remove ignored jobs before the dedup step, so that it gets fewer rows.
     if !ignore_rules.is_empty() {
         let removed = ignore::apply(&mut rows, &ignore_rules);
-        eprintln!(
+        info!(
             "{removed} jobs ignored (ignore list: {} entries)",
             ignore_rules.len()
         );
     }
 
     if args.kill_dups && rows.len() > 1 {
-        eprintln!("Removing duplicates ...");
+        info!("Removing duplicates ...");
         let before = rows.len();
         match dedup::find_dups(&backend, &rows).await {
             Ok(groups) => {
                 rows = dedup::merge(rows, groups);
-                eprintln!("  {} duplicates removed", before - rows.len());
+                info!("  {} duplicates removed", before - rows.len());
             }
             Err(e) => eprintln!("  warning: duplicates not removed: {e}"),
         }
@@ -104,8 +127,8 @@ async fn main() -> Res<()> {
 
     jobs::write_csv(&args.out, &mut rows)?;
     eprintln!("Wrote {} jobs to {}", rows.len(), args.out);
-    eprintln!("{}", backend.usage_summary());
-    if !rows.is_empty() {
+    info!("{}", backend.usage_summary());
+    if verbose() && !rows.is_empty() {
         print!("\n{}", jobs::table(&rows, TABLE_ROWS));
     }
 
