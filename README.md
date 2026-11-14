@@ -32,6 +32,14 @@ flowchart LR
     DUP -- no --> CSV["📊 jobs.csv<br/>best match first"]
 ```
 
+## Requirements
+
+| What | When |
+|---|---|
+| [Docker](https://www.docker.com/products/docker-desktop/) | Recommended way to run. Nothing else to install. |
+| [Rust](https://rustup.rs/) 1.88 or newer | Only to run or build without Docker. |
+| One model provider: [Ollama](https://ollama.com/) (local, free) **or** an Anthropic / OpenAI API key | Always. The default is Ollama with `qwen3:1.7b`. |
+
 ## Quick start
 
 The recommended way is Docker: no Rust, no dependencies, the same on Linux, macOS and Windows.
@@ -82,6 +90,19 @@ CSV columns: `match_score, title, company, location, description, match_reason, 
   Indeed, Workday). Test a page first with `page-text`. See [Sources](docs/sources.md).
 - The quality of the scores depends on the model. Small local models are fast and free, but
   they miss more jobs and do not merge duplicates reliably.
+
+## Built with
+
+Rust (edition 2024) with a small set of libraries:
+[tokio](https://tokio.rs/) (async runtime),
+[reqwest](https://docs.rs/reqwest) (HTTP),
+[serde](https://serde.rs/) with `serde_json` and `serde_yaml` (API replies and config),
+[csv](https://docs.rs/csv),
+[pdf-extract](https://docs.rs/pdf-extract) (PDF CVs),
+[dotenvy](https://docs.rs/dotenvy) (API keys from `.env`).
+The HTML-to-text step has no library: it is a small parser in `src/fetch.rs`.
+
+CI with GitHub Actions, multi-platform Docker image on `ghcr.io`, demo GIF with [VHS](https://github.com/charmbracelet/vhs).
 
 ## License
 
