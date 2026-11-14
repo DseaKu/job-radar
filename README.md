@@ -24,6 +24,27 @@ flowchart LR
 
 ## Quick start
 
+The recommended way is Docker: no Rust, no dependencies, the same on Linux, macOS and Windows.
+Put your CV and your config files into one folder, then run:
+
+```sh
+docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt
+```
+
+The container reads `config.yaml`, `sources.yaml`, `ignore.yaml`, `.env` and your CV from the
+current folder, and writes `jobs.csv` back into it. Nothing is stored in the image.
+See [Docker](docs/docker.md) for Ollama, API keys and Linux (two more options).
+
+Select the model in `config.yaml`. See [Providers](docs/providers.md).
+
+### Without Docker
+
+With a Rust toolchain:
+
+```sh
+cargo run --release -- --cv cv.txt
+```
+
 Try the demo with a small local model (no API key, about 1 minute):
 
 ```sh
@@ -31,27 +52,11 @@ ollama pull qwen3:1.7b
 demo/run.sh
 ```
 
-Run it on real pages:
-
-```sh
-cargo run -- --cv cv.txt --out jobs.csv https://a.com/jobs https://b.com/careers
-```
-
-Select the model in `config.yaml`. See [Providers](docs/providers.md).
-
-Or use Docker, without installing Rust. Your config files and your CV stay in your folder:
-
-```sh
-docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt
-```
-
-See [Docker](docs/docker.md) (Linux needs two more options).
-
 ## Options
 
 | Command / flag | Effect |
 |---|---|
-| `--cv <file>` | CV as text or PDF. Without it, the CV comes from stdin (`pbpaste \| cargo run -- …`). |
+| `--cv <file>` | CV as text or PDF. Without it, the CV comes from stdin (`pbpaste \| docker run -i …`). |
 | `--out <file>` | Output CSV (default `jobs.csv`). |
 | `--kill-dups` | One more LLM call that merges the same job from different platforms. |
 | `convert-cv <pdf>` | Converts a PDF CV to `cv.txt` once. |

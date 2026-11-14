@@ -24,4 +24,5 @@ demo/run.sh
 
 The demo does not use `--kill-dups`: a model this small does not merge duplicates reliably.
 
-To record the GIF again (needs `vhs` from Homebrew): `vhs demo/demo.tape`.
+To record the GIF again (needs `vhs` from Homebrew, Docker and Ollama running):
+`vhs demo/demo.tape`. The GIF shows the Docker image from `ghcr.io`.
