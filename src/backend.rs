@@ -64,9 +64,15 @@ impl Backend {
             None => None,
         };
 
+        // For Ollama without a base_url in the config, JOB_RADAR_OLLAMA_URL can set the address.
+        // The Docker image uses it: inside a container, "localhost" is the container itself.
+        let ollama_url = env::var("JOB_RADAR_OLLAMA_URL")
+            .ok()
+            .filter(|u| p.kind == ProviderKind::Ollama && !u.trim().is_empty());
         let mut base_url = p
             .base_url
             .as_deref()
+            .or(ollama_url.as_deref())
             .unwrap_or(p.kind.default_base_url())
             .trim_end_matches('/')
             .to_string();

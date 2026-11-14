@@ -1,0 +1,6 @@
+# Only Cargo.toml, Cargo.lock and src/ go into the image.
+# Private files must never reach the build context.
+*
+!Cargo.toml
+!Cargo.lock
+!src/
