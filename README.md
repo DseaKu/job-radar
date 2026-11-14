@@ -1,8 +1,13 @@
 # job_radar
 
+[![CI](https://github.com/DseaKu/job-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/DseaKu/job-radar/actions/workflows/ci.yml)
+[![Demo](https://github.com/DseaKu/job-radar/actions/workflows/demo.yml/badge.svg)](https://github.com/DseaKu/job-radar/actions/workflows/demo.yml)
+
 Give it your CV and one or more career-page URLs.
 It downloads each page, asks an LLM to find the job postings, rates each job against your CV,
 and writes everything to a CSV file (best match first).
+
+![job_radar demo: a CV and two career pages in, a ranked job list out](demo/demo.gif)
 
 ```mermaid
 flowchart LR
@@ -18,6 +23,21 @@ flowchart LR
     DUP -- yes --> DEDUP["🤖 LLM<br/>merge duplicates"] --> CSV
     DUP -- no --> CSV["📊 jobs.csv<br/>best match first"]
 ```
+
+## Try the demo (no API key)
+
+The demo runs the full pipeline on your machine: two small fictional job pages
+(`demo/site/`), a fictional CV (`demo/demo_cv.txt`) and a small local model.
+
+```sh
+ollama pull qwen3:1.7b   # about 1.4 GB
+demo/run.sh              # about 1 minute
+```
+
+The same demo runs on GitHub Actions on each change: open the latest
+[Demo run](https://github.com/DseaKu/job-radar/actions/workflows/demo.yml) and look at its
+summary for the result table with the reason for each score.
+To record the GIF again: `vhs demo/demo.tape`.
 
 ## Run
 
@@ -126,6 +146,34 @@ Put API tokens in a `.env` file (Git ignores it):
 ANTHROPIC_API_KEY=your-key-here
 OPENAI_API_KEY=your-key-here
 ```
+
+## How it works
+
+- **One interface, three APIs.** Ollama (native chat API), any OpenAI-compatible API and the
+  Anthropic Messages API sit behind one `Backend`. Switch with one line in `config.yaml`.
+- **Pages larger than the context window.** The page text is cut into slices that fit next to
+  the CV, the prompt and `max_tokens`. The slices overlap by 10%, so a job at a boundary is
+  complete in one of them, and the copies from the overlap are removed.
+- **Replies that are cut off.** If a reply stops at `max_tokens`, the complete jobs before the
+  cut are kept, and the slice is split in half and read again (up to 3 levels).
+- **Imperfect model output.** The parser finds the JSON array inside prose or code fences,
+  repairs invalid escapes that models copy from pages (`Entwickler\*in`), and moves links that
+  small models put into the title to the `url` column.
+- **Cost control.** Each call logs its token usage, and a run ends with the total.
+  `page-text` tests a new source without an AI call, and one page uses at most 20 slices.
+
+## Testing
+
+- **[CI](.github/workflows/ci.yml)** (each push): `cargo fmt --check`, `cargo clippy -D warnings`
+  and the unit tests. The tests need no network and no model: HTML to text, slicing, JSON
+  repair, recovery of cut-off replies, the ignore list and the variables in `sources.yaml`.
+- **[Demo](.github/workflows/demo.yml)** (each change of the code or the demo): an end-to-end
+  run with a real model. Ollama runs as a service container on the free GitHub runner, so it
+  needs no API key and costs nothing. `temperature: 0` makes the result stable. The workflow
+  checks only what does not depend on the model's wording (number of jobs, ignore list,
+  scores present) and writes the result table to the run summary.
+
+The demo does not use `--kill-dups`: a model this small does not merge duplicates reliably.
 
 ## Customize
 
