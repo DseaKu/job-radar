@@ -11,12 +11,14 @@ An LLM finds the job postings, rates each job against your CV, and writes a CSV 
 flowchart LR
     CV["📄 CV<br/>text, PDF or clipboard"]
     SRC["🌐 Career pages<br/>URLs or sources.yaml"]
+    IGNF["🚫 ignore.yaml"]
 
-    SRC --> FETCH["Download page<br/>split into parts"]
-    FETCH --> LLM
+    SRC --> FETCH["✂️ Download page<br/>split into parts"]
+    FETCH -- "one call per part" --> LLM
     CV --> LLM["🤖 LLM<br/>find jobs + rate vs. CV"]
 
-    LLM --> IGN["Ignore list<br/>ignore.yaml"]
+    LLM --> IGN["🧹 Remove ignored jobs"]
+    IGNF --> IGN
     IGN --> DUP{"--kill-dups?"}
     DUP -- yes --> DEDUP["🤖 LLM<br/>merge duplicates"] --> CSV
     DUP -- no --> CSV["📊 jobs.csv<br/>best match first"]
@@ -65,6 +67,17 @@ demo/run.sh
 | *(no URLs)* | Reads the URLs from `sources.yaml`. |
 
 CSV columns: `match_score, title, company, location, description, match_reason, url, source`.
+
+## Limitations
+
+- Pages that build their job list with JavaScript return no jobs (for example LinkedIn,
+  Indeed, Workday). Test a page first with `page-text`. See [Sources](docs/sources.md).
+- The quality of the scores depends on the model. Small local models are fast and free, but
+  they miss more jobs and do not merge duplicates reliably.
+
+## License
+
+[MIT](LICENSE)
 
 ## Documentation
 

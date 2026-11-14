@@ -9,3 +9,6 @@ cv*
 
 # Private ignore list (template: ignore.example.yaml)
 /ignore.yaml
+
+# macOS folder metadata
+.DS_Store

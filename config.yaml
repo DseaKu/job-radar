@@ -1,12 +1,12 @@
 # Agent settings. Set AGENTS_CONFIG to use a different file.
 
 # The provider entry to use. To switch, change this one line.
-# active: claude
-active: claude
+# The default `local` needs no API key: install Ollama, then run `ollama pull qwen3:1.7b`.
+active: local
 
 # Language for "description" and "match_reason" in the CSV (for example English, German).
 # Job titles, company names and locations stay as they appear on the page.
-output_language: German
+output_language: English
 
 # The search pages are in sources.yaml (private, not in Git).
 # Template: sources.example.yaml.
@@ -32,7 +32,7 @@ output_language: German
 providers:
   local:
     type: ollama
-    model: qwen3:4b
+    model: qwen3:1.7b        # small and fast; qwen3:8b gives better results (about 5 GB)
     context_length: 32768
 
   claude:

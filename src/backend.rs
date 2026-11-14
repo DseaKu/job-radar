@@ -110,6 +110,37 @@ impl Backend {
     }
 
     async fn chat_ollama(&self, system: &str, user: &str) -> Res<String> {
+        let request = self
+            .http
+            .post(format!("{}/api/chat", self.base_url))
+            .json(&self.ollama_body(system, user));
+        self.read_ollama(&send(request).await?)
+    }
+
+    async fn chat_openai(&self, system: &str, user: &str) -> Res<String> {
+        let mut request = self
+            .http
+            .post(format!("{}/chat/completions", self.base_url))
+            .json(&self.openai_body(system, user));
+        if let Some(key) = &self.api_key {
+            request = request.bearer_auth(key);
+        }
+        self.read_openai(&send(request).await?)
+    }
+
+    async fn chat_anthropic(&self, system: &str, user: &str) -> Res<String> {
+        let mut request = self
+            .http
+            .post(format!("{}/messages", self.base_url))
+            .header("anthropic-version", ANTHROPIC_VERSION)
+            .json(&self.anthropic_body(system, user));
+        if let Some(key) = &self.api_key {
+            request = request.header("x-api-key", key);
+        }
+        self.read_anthropic(&send(request).await?)
+    }
+
+    fn ollama_body(&self, system: &str, user: &str) -> Value {
         let mut body = json!({
             "model": self.model,
             "stream": false,
@@ -127,11 +158,10 @@ impl Backend {
         if let Some(t) = self.temperature {
             body["options"]["temperature"] = json!(t);
         }
-        let request = self
-            .http
-            .post(format!("{}/api/chat", self.base_url))
-            .json(&body);
-        let payload = send(request).await?;
+        body
+    }
+
+    fn read_ollama(&self, payload: &Value) -> Res<String> {
         self.record_usage(&payload["prompt_eval_count"], &payload["eval_count"]);
 
         // Ollama cuts a prompt that is too long without an error. Detect it from the token count.
@@ -152,7 +182,7 @@ impl Backend {
         Ok(strip_think(content))
     }
 
-    async fn chat_openai(&self, system: &str, user: &str) -> Res<String> {
+    fn openai_body(&self, system: &str, user: &str) -> Value {
         let mut body = json!({
             "model": self.model,
             "max_tokens": self.max_tokens,
@@ -167,14 +197,10 @@ impl Backend {
         if let Some(t) = self.temperature {
             body["temperature"] = json!(t);
         }
-        let mut request = self
-            .http
-            .post(format!("{}/chat/completions", self.base_url))
-            .json(&body);
-        if let Some(key) = &self.api_key {
-            request = request.bearer_auth(key);
-        }
-        let payload = send(request).await?;
+        body
+    }
+
+    fn read_openai(&self, payload: &Value) -> Res<String> {
         self.record_usage(
             &payload["usage"]["prompt_tokens"],
             &payload["usage"]["completion_tokens"],
@@ -189,7 +215,7 @@ impl Backend {
             .ok_or_else(|| format!("unexpected API response: {payload}").into())
     }
 
-    async fn chat_anthropic(&self, system: &str, user: &str) -> Res<String> {
+    fn anthropic_body(&self, system: &str, user: &str) -> Value {
         let mut body = json!({
             "model": self.model,
             "max_tokens": self.max_tokens,
@@ -202,15 +228,10 @@ impl Backend {
         if let Some(t) = self.temperature {
             body["temperature"] = json!(t);
         }
-        let mut request = self
-            .http
-            .post(format!("{}/messages", self.base_url))
-            .header("anthropic-version", ANTHROPIC_VERSION)
-            .json(&body);
-        if let Some(key) = &self.api_key {
-            request = request.header("x-api-key", key);
-        }
-        let payload = send(request).await?;
+        body
+    }
+
+    fn read_anthropic(&self, payload: &Value) -> Res<String> {
         // Input = uncached + cache-read + cache-write tokens.
         let usage = &payload["usage"];
         let input = [
@@ -304,4 +325,140 @@ async fn send(request: reqwest::RequestBuilder) -> Res<Value> {
         return Err(format!("API request failed ({status}): {payload}").into());
     }
     Ok(payload)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config(yaml: &str) -> Config {
+        serde_yaml::from_str(yaml).unwrap()
+    }
+
+    fn backend(kind: &str, extra: &str) -> Backend {
+        let yaml = format!(
+            "active: p\nproviders:\n  p:\n    type: {kind}\n    model: m\n    api_key_env: PATH\n    \
+             max_tokens: 100\n    context_length: 1000\n{extra}"
+        );
+        Backend::from_config(&config(&yaml)).unwrap()
+    }
+
+    fn cut_off(result: Res<String>) -> ReplyCutOff {
+        *result.unwrap_err().downcast::<ReplyCutOff>().unwrap()
+    }
+
+    #[test]
+    fn ollama_body_and_reply() {
+        let b = backend("ollama", "    temperature: 0\n");
+        let body = b.ollama_body("sys", "usr");
+        assert_eq!(body["think"], false);
+        assert_eq!(body["options"]["num_ctx"], 1000);
+        assert_eq!(body["options"]["num_predict"], 100);
+        assert_eq!(body["options"]["temperature"], 0.0);
+        assert_eq!(body["messages"][1]["content"], "usr");
+
+        let reply = json!({
+            "message": { "content": "<think>hmm</think>\n[1]" },
+            "prompt_eval_count": 40, "eval_count": 7, "done_reason": "stop"
+        });
+        assert_eq!(b.read_ollama(&reply).unwrap(), "[1]");
+        assert_eq!(
+            b.usage_summary(),
+            "Total usage: 40 input tokens, 7 output tokens (1 AI calls)"
+        );
+    }
+
+    #[test]
+    fn ollama_cut_off_reply() {
+        let b = backend("ollama", "");
+        let reply =
+            json!({ "message": { "content": "[{\"title\": \"A\"}, {" }, "done_reason": "length" });
+        let cut = cut_off(b.read_ollama(&reply));
+        assert_eq!(cut.max_tokens, 100);
+        assert_eq!(cut.partial, "[{\"title\": \"A\"}, {");
+    }
+
+    #[test]
+    fn openai_reply_and_cut_off() {
+        let b = backend("openai", "    effort: low\n");
+        assert_eq!(b.openai_body("s", "u")["reasoning_effort"], "low");
+
+        let ok = json!({
+            "choices": [{ "message": { "content": "[]" }, "finish_reason": "stop" }],
+            "usage": { "prompt_tokens": 12, "completion_tokens": 3 }
+        });
+        assert_eq!(b.read_openai(&ok).unwrap(), "[]");
+        let cut =
+            json!({ "choices": [{ "message": { "content": "[{" }, "finish_reason": "length" }] });
+        assert_eq!(cut_off(b.read_openai(&cut)).partial, "[{");
+        assert!(b.read_openai(&json!({ "error": "x" })).is_err());
+        assert!(
+            b.usage_summary()
+                .contains("12 input tokens, 3 output tokens (3 AI calls)")
+        );
+    }
+
+    #[test]
+    fn anthropic_reply_usage_and_stop_reasons() {
+        let b = backend("anthropic", "    effort: medium\n");
+        let body = b.anthropic_body("sys", "usr");
+        assert_eq!(body["system"], "sys");
+        assert_eq!(body["output_config"]["effort"], "medium");
+
+        // Text blocks are joined; other blocks are skipped; cache tokens count as input.
+        let ok = json!({
+            "content": [
+                { "type": "thinking", "thinking": "..." },
+                { "type": "text", "text": "[1," },
+                { "type": "text", "text": "2]" }
+            ],
+            "stop_reason": "end_turn",
+            "usage": { "input_tokens": 10, "cache_read_input_tokens": 90,
+                       "cache_creation_input_tokens": 5, "output_tokens": 8 }
+        });
+        assert_eq!(b.read_anthropic(&ok).unwrap(), "[1,2]");
+        assert!(
+            b.usage_summary()
+                .starts_with("Total usage: 105 input tokens, 8 output tokens")
+        );
+
+        let cut =
+            json!({ "content": [{ "type": "text", "text": "[{" }], "stop_reason": "max_tokens" });
+        assert_eq!(cut_off(b.read_anthropic(&cut)).partial, "[{");
+
+        let refused = json!({ "content": [], "stop_reason": "refusal" });
+        let err = b.read_anthropic(&refused).unwrap_err().to_string();
+        assert!(err.starts_with("the model refused"));
+    }
+
+    #[test]
+    fn config_rules() {
+        // Ollama: an old `/v1` address becomes the server root; the config wins over the default.
+        let b = backend("ollama", "    base_url: http://gpu-box:11434/v1/\n");
+        assert_eq!(b.base_url, "http://gpu-box:11434");
+
+        let missing = config(
+            "active: c\nproviders:\n  c:\n    type: anthropic\n    model: m\n    \
+             api_key_env: JOB_RADAR_TEST_KEY_THAT_IS_NOT_SET\n",
+        );
+        let err = Backend::from_config(&missing).err().unwrap().to_string();
+        assert_eq!(
+            err,
+            "provider 'c' requires the JOB_RADAR_TEST_KEY_THAT_IS_NOT_SET environment variable"
+        );
+    }
+
+    #[test]
+    fn page_budget_keeps_space_for_reply_and_prompt() {
+        let b = backend("ollama", "");
+        // window 1000 * 0.9 = 900 tokens, minus 100 reply, minus 300 / 3 = 100 prompt tokens.
+        assert_eq!(b.page_char_budget(300), (900 - 100 - 100) * CHARS_PER_TOKEN);
+        assert_eq!(b.page_char_budget(1_000_000), 0);
+    }
+
+    #[test]
+    fn strips_think_block_only_when_complete() {
+        assert_eq!(strip_think("<think>a</think> [1]"), "[1]");
+        assert_eq!(strip_think("<think>a [1]"), "<think>a [1]");
+    }
 }

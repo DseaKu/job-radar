@@ -2,6 +2,9 @@
 name = "job_radar"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+description = "Finds job postings on career pages and rates them against your CV with an LLM"
+repository = "https://github.com/DseaKu/job-radar"
 
 [dependencies]
 dotenvy = "0.15.7"

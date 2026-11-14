@@ -66,20 +66,7 @@ async fn main() -> Res<()> {
     let ignore_rules = ignore::load()?;
 
     // URLs on the command line win; otherwise use the enabled sources from the config.
-    let targets: Vec<(String, String)> = if args.urls.is_empty() {
-        config::load_sources()?
-            .iter()
-            .filter(|s| s.enabled)
-            .map(|s| (s.name.clone(), s.url.clone()))
-            .collect()
-    } else {
-        args.urls.iter().map(|u| (u.clone(), u.clone())).collect()
-    };
-    if targets.is_empty() {
-        return Err("no URLs given and no enabled sources in sources.yaml \
-                    (create it with: cp sources.example.yaml sources.yaml)"
-            .into());
-    }
+    let targets = select_targets(&args.urls, config::load_sources)?;
 
     let backend = Backend::from_config(&config)?;
     info!("Using backend: {}", backend.describe());
@@ -136,4 +123,65 @@ async fn main() -> Res<()> {
         return Err("all URLs failed".into());
     }
     Ok(())
+}
+
+/// The pages to read, as (name for the log, URL). URLs on the command line win; otherwise the
+/// enabled entries from sources.yaml are used. `load_sources` is called only without URLs.
+fn select_targets(
+    urls: &[String],
+    load_sources: impl FnOnce() -> Res<Vec<config::Source>>,
+) -> Res<Vec<(String, String)>> {
+    let targets: Vec<(String, String)> = if urls.is_empty() {
+        load_sources()?
+            .into_iter()
+            .filter(|s| s.enabled)
+            .map(|s| (s.name, s.url))
+            .collect()
+    } else {
+        urls.iter().map(|u| (u.clone(), u.clone())).collect()
+    };
+    if targets.is_empty() {
+        return Err("no URLs given and no enabled sources in sources.yaml \
+                    (create it with: cp sources.example.yaml sources.yaml)"
+            .into());
+    }
+    Ok(targets)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use config::Source;
+
+    fn source(name: &str, enabled: bool) -> Source {
+        Source {
+            name: name.into(),
+            url: format!("https://{name}.de"),
+            enabled,
+        }
+    }
+
+    #[test]
+    fn command_line_urls_win_and_sources_are_not_loaded() {
+        let urls = vec!["https://x.de/jobs".to_string()];
+        let targets = select_targets(&urls, || panic!("sources must not be loaded")).unwrap();
+        assert_eq!(targets, [(urls[0].clone(), urls[0].clone())]);
+    }
+
+    #[test]
+    fn only_enabled_sources_are_read() {
+        let targets =
+            select_targets(&[], || Ok(vec![source("a", true), source("b", false)])).unwrap();
+        assert_eq!(targets, [("a".to_string(), "https://a.de".to_string())]);
+    }
+
+    #[test]
+    fn nothing_to_read_is_an_error() {
+        let err = select_targets(&[], || Ok(vec![source("b", false)])).unwrap_err();
+        assert!(
+            err.to_string()
+                .starts_with("no URLs given and no enabled sources")
+        );
+        assert!(select_targets(&[], || Err("invalid sources.yaml".into())).is_err());
+    }
 }

@@ -27,29 +27,51 @@ The CV comes from --cv, or from stdin if no --cv is given:
   pbpaste | job_radar https://example.com/careers
   job_radar --cv cv.md --out jobs.csv https://a.com/jobs https://b.com/careers";
 
-/// Parses the arguments. Prints usage and exits if they are incomplete.
-pub fn parse_args() -> Res<Args> {
-    let mut cv_path = None;
-    let mut out = "jobs.csv".to_string();
-    let mut urls = Vec::new();
-    let mut kill_dups = false;
-    let mut verbose = false;
+/// The options from the command line, before the CV is read.
+#[derive(Debug, PartialEq)]
+struct Flags {
+    cv_path: Option<String>,
+    out: String,
+    urls: Vec<String>,
+    kill_dups: bool,
+    verbose: bool,
+    help: bool,
+}
 
-    let mut args = env::args().skip(1);
+/// Reads the options from the arguments (without the program name).
+fn parse_flags(args: impl IntoIterator<Item = String>) -> Res<Flags> {
+    let mut flags = Flags {
+        cv_path: None,
+        out: "jobs.csv".to_string(),
+        urls: Vec::new(),
+        kill_dups: false,
+        verbose: false,
+        help: false,
+    };
+    let mut args = args.into_iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--cv" => cv_path = Some(args.next().ok_or("--cv needs a file path")?),
-            "--out" | "-o" => out = args.next().ok_or("--out needs a file path")?,
-            "--kill-dups" => kill_dups = true,
-            "-v" | "--verbose" => verbose = true,
-            "-h" | "--help" | "help" => print_usage_and_exit(),
+            "--cv" => flags.cv_path = Some(args.next().ok_or("--cv needs a file path")?),
+            "--out" | "-o" => flags.out = args.next().ok_or("--out needs a file path")?,
+            "--kill-dups" => flags.kill_dups = true,
+            "-v" | "--verbose" => flags.verbose = true,
+            "-h" | "--help" | "help" => flags.help = true,
             _ if arg.starts_with('-') => return Err(format!("unknown option: {arg}").into()),
-            _ => urls.push(arg),
+            _ => flags.urls.push(arg),
         }
     }
+    Ok(flags)
+}
 
-    let cv = match cv_path {
-        Some(path) => crate::cv::read(&path)?,
+/// Parses the arguments and reads the CV. Prints usage and exits if they are incomplete.
+pub fn parse_args() -> Res<Args> {
+    let flags = parse_flags(env::args().skip(1))?;
+    if flags.help {
+        print_usage_and_exit();
+    }
+
+    let cv = match &flags.cv_path {
+        Some(path) => crate::cv::read(path)?,
         None => read_piped_input()?,
     };
     if cv.trim().is_empty() {
@@ -59,10 +81,10 @@ pub fn parse_args() -> Res<Args> {
 
     Ok(Args {
         cv,
-        urls,
-        out,
-        kill_dups,
-        verbose,
+        urls: flags.urls,
+        out: flags.out,
+        kill_dups: flags.kill_dups,
+        verbose: flags.verbose,
     })
 }
 
@@ -81,4 +103,49 @@ fn read_piped_input() -> io::Result<String> {
     let mut buf = String::new();
     stdin.lock().read_to_string(&mut buf)?;
     Ok(buf)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Res<Flags> {
+        parse_flags(args.iter().map(|a| a.to_string()))
+    }
+
+    #[test]
+    fn defaults() {
+        let f = parse(&[]).unwrap();
+        assert_eq!(f.out, "jobs.csv");
+        assert!(f.cv_path.is_none() && f.urls.is_empty() && !f.kill_dups && !f.verbose && !f.help);
+    }
+
+    #[test]
+    fn all_options_in_any_order() {
+        let f = parse(&[
+            "https://a.de/jobs",
+            "-v",
+            "--cv",
+            "cv.txt",
+            "-o",
+            "out.csv",
+            "--kill-dups",
+            "https://b.de/careers",
+        ])
+        .unwrap();
+        assert_eq!(f.cv_path.as_deref(), Some("cv.txt"));
+        assert_eq!(f.out, "out.csv");
+        assert_eq!(f.urls, ["https://a.de/jobs", "https://b.de/careers"]);
+        assert!(f.kill_dups && f.verbose && !f.help);
+        assert!(parse(&["--verbose", "--out", "x.csv"]).unwrap().verbose);
+        assert!(parse(&["help"]).unwrap().help);
+    }
+
+    #[test]
+    fn errors() {
+        let err = |args: &[&str]| parse(args).unwrap_err().to_string();
+        assert_eq!(err(&["--cv"]), "--cv needs a file path");
+        assert_eq!(err(&["--out"]), "--out needs a file path");
+        assert_eq!(err(&["--verbos"]), "unknown option: --verbos");
+    }
 }
