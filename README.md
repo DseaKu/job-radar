@@ -36,7 +36,8 @@ Settings → Privacy & Security → Open Anyway_; on Windows, _More info → Run
 anyway_.
 
 In _Settings_, select the provider, paste the API key and add your search pages.
-Then drop your CV into the window and click _Find jobs_. To build the app
+Then drop your CV into the window and click _Find jobs_. To write a cover letter
+(LaTeX) for a job, select it and click _Write application_. To build the app
 yourself: `cd gui && npm install && npm run tauri build` (needs Rust, Node.js
 and on Linux the [Tauri packages](https://v2.tauri.app/start/prerequisites/#linux)).
 
@@ -76,6 +77,7 @@ cargo run --release -- --cv cv.txt
 | `-v`, `--verbose`       | Shows the progress and the token usage.                                   |
 | `-p`, `--print-results` | Prints the 10 best jobs.                                                  |
 | `--dump <dir>`          | Writes the page text and all found jobs for each website into `<dir>`.    |
+| `application <n>`       | Writes a cover letter for job `n` of the CSV (or a job URL): LaTeX + PDF. |
 | `convert-cv <pdf>`      | Converts a PDF CV to `cv.txt` once.                                       |
 | `page-text <url>`       | Shows the page text without an LLM call. Use it to test a new source.     |
 | _(no URLs)_             | Reads the URLs from `sources.yaml`.                                       |
@@ -92,6 +94,7 @@ CSV columns:
 ## More
 
 - Docs: [Sources](docs/sources.md) · [Ignore list](docs/ignore-list.md) ·
+  [Applications](docs/applications.md) ·
   [Providers](docs/providers.md) · [Docker](docs/docker.md) ·
   [How it works](docs/how-it-works.md) · [Testing](docs/testing.md)
 - Built with Rust (tokio, reqwest, serde, csv, pdf-extract, dotenvy) and Tauri.

@@ -24,6 +24,21 @@ output_language: English
 #     Ignore jobs in sales, marketing and management.
 extra_instructions: ""
 
+# Cover letters: `job_radar application <number|url>` or "Write application" in the app.
+# Each letter is a LaTeX file (cover_letter.tex) in its own folder in applications_dir.
+# If LaTeX is installed, the PDF (cover_letter.pdf) is built automatically.
+# Your data and your own LaTeX layout: letter.yaml (template: letter.example.yaml).
+# A relative path starts in the current folder; ~ is your home folder. See docs/applications.md.
+applications_dir: applications
+
+# Extra instructions for the cover letters. Optional.
+# Without them, the letter is in the language of the job posting.
+# Examples:
+#   application_instructions: |
+#     I can start on 1 March.
+#     Write the letter in English.
+application_instructions: ""
+
 # The search pages are in sources.yaml (private, not in Git).
 # Template: sources.example.yaml.
 

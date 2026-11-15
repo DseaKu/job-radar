@@ -16,5 +16,11 @@ cv*
 # Output of --dump
 /dump/
 
+# Cover letters (applications_dir in config.yaml)
+/applications/
+
+# Private letter template (template: letter.example.yaml)
+/letter.yaml
+
 # Private settings (template: config.example.yaml)
 /config.yaml

@@ -65,7 +65,7 @@ impl Dump {
 
 /// "Nordlicht Robotics (careers page)" -> "nordlicht-robotics-careers-page".
 /// A URL as the name (URLs from the command line) becomes its host and path.
-fn slug(name: &str) -> String {
+pub(crate) fn slug(name: &str) -> String {
     let name = name
         .trim_start_matches("https://")
         .trim_start_matches("http://")

@@ -3,13 +3,18 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import type { JobRow } from "../lib/types";
 
+  /** "writing": a letter for this job is in progress; "busy": a letter for another job. */
+  export type WriteState = "ready" | "writing" | "busy" | "no-cv";
+
   interface Props {
     row: JobRow;
+    writeState: WriteState;
     onClose: () => void;
+    onWriteApplication: () => void;
     onIgnoreJob: () => void;
     onIgnoreCompany: () => void;
   }
-  let { row, onClose, onIgnoreJob, onIgnoreCompany }: Props = $props();
+  let { row, writeState, onClose, onWriteApplication, onIgnoreJob, onIgnoreCompany }: Props = $props();
 
   let link = $derived(row.url || row.source);
   let scoreClass = $derived(
@@ -43,6 +48,12 @@
       <button class="btn btn-primary" onclick={() => openUrl(link)}>
         {row.url ? "Open the job page" : "Open the source page"}
       </button>
+    {/if}
+    <button class="btn" onclick={onWriteApplication} disabled={writeState !== "ready"}>
+      {writeState === "writing" ? "Writing the application ..." : "Write application"}
+    </button>
+    {#if writeState === "no-cv"}
+      <p class="hint">Choose your CV first. The cover letter uses it.</p>
     {/if}
     <div class="row">
       <button class="btn" onclick={onIgnoreJob}>Ignore this job</button>

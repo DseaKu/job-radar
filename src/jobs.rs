@@ -252,7 +252,7 @@ fn split_chunks(text: &str, size: usize, overlap: usize) -> Vec<&str> {
     }
 }
 
-fn floor_boundary(text: &str, mut i: usize) -> usize {
+pub(crate) fn floor_boundary(text: &str, mut i: usize) -> usize {
     while !text.is_char_boundary(i) {
         i -= 1;
     }
@@ -382,7 +382,7 @@ fn parse_partial_array(reply: &str) -> Vec<Value> {
 }
 
 /// Doubles each backslash that does not start a valid JSON escape.
-fn fix_escapes(json: &str) -> String {
+pub(crate) fn fix_escapes(json: &str) -> String {
     let mut out = String::with_capacity(json.len());
     let mut chars = json.chars().peekable();
     while let Some(c) = chars.next() {

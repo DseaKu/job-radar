@@ -9,6 +9,7 @@
   import SourcesTab from "./settings/SourcesTab.svelte";
   import SearchTab from "./settings/SearchTab.svelte";
   import IgnoreTab from "./settings/IgnoreTab.svelte";
+  import ApplicationsTab from "./settings/ApplicationsTab.svelte";
 
   interface Props {
     killDups: boolean;
@@ -21,6 +22,7 @@
     { id: "sources", title: "Sources" },
     { id: "search", title: "Search" },
     { id: "ignore", title: "Ignore list" },
+    { id: "applications", title: "Applications" },
   ] as const;
   type TabId = (typeof tabs)[number]["id"];
 
@@ -32,7 +34,14 @@
 
   // The draft. The variables are a list, so that they can be renamed in place.
   let loaded = $state(false);
-  let config = $state<Config>({ active: "", providers: {}, output_language: "English", extra_instructions: "" });
+  let config = $state<Config>({
+    active: "",
+    providers: {},
+    output_language: "English",
+    extra_instructions: "",
+    applications_dir: "applications",
+    application_instructions: "",
+  });
   let vars = $state<{ name: string; value: string }[]>([]);
   let sources = $state<Source[]>([]);
   let rules = $state<Rule[]>([]);
@@ -179,8 +188,10 @@
           <SourcesTab bind:sources bind:vars varsRecord={varsRecord} />
         {:else if tab === "search"}
           <SearchTab bind:config bind:killDups={dups} />
-        {:else}
+        {:else if tab === "ignore"}
           <IgnoreTab bind:rules />
+        {:else}
+          <ApplicationsTab bind:config {dataDir} />
         {/if}
       {/if}
     </div>

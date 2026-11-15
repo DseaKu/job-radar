@@ -18,6 +18,8 @@ export interface Config {
   providers: Record<string, ProviderConfig>;
   output_language: string;
   extra_instructions: string;
+  applications_dir: string;
+  application_instructions: string;
 }
 
 export interface Source {

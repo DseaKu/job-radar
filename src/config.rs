@@ -21,6 +21,14 @@ pub struct Config {
     /// (for example "Rate remote jobs higher"). Empty: no extra instructions.
     #[serde(default)]
     pub extra_instructions: String,
+    /// Folder for the cover letters. Each letter gets its own folder in it.
+    /// A relative path starts in the current folder; `~` is the home folder.
+    #[serde(default = "default_applications_dir")]
+    pub applications_dir: String,
+    /// Extra instructions from the user for the cover letters (for example "I can start in
+    /// March"). Empty: no extra instructions.
+    #[serde(default)]
+    pub application_instructions: String,
 }
 
 const DEFAULT_SOURCES_PATH: &str = "sources.yaml";
@@ -150,6 +158,10 @@ fn default_output_language() -> String {
     "English".to_string()
 }
 
+fn default_applications_dir() -> String {
+    "applications".to_string()
+}
+
 /// One provider entry. Only `type` and `model` are required; the rest has defaults per type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -237,6 +249,8 @@ impl Default for Config {
             providers: BTreeMap::from([("local".to_string(), local)]),
             output_language: default_output_language(),
             extra_instructions: String::new(),
+            applications_dir: default_applications_dir(),
+            application_instructions: String::new(),
         }
     }
 }

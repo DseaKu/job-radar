@@ -16,6 +16,7 @@ pub struct Args {
 
 const USAGE: &str = "\
 Usage: job_radar [--cv <cv.txt|cv.pdf>] [--out <jobs.csv>] [--kill-dups] [-v] [-p] [--dump <dir>] [<url> ...]
+       job_radar application [--cv <cv.txt|cv.pdf>] [--jobs <jobs.csv>] <number|url>
        job_radar convert-cv <cv.pdf> [<cv.txt>]
        job_radar page-text <url>
 
@@ -27,6 +28,8 @@ Without URLs, the enabled sources in sources.yaml are read.
 Without them, only warnings, errors and the result line are shown.
 `--dump <dir>` writes two files for each website into <dir>: the page text that the AI got
 (<name>.page.txt) and all jobs found on it, before the ignore list (<name>.jobs.txt).
+`application` writes a cover letter as a LaTeX file into a new folder in `applications_dir`
+(config.yaml). The job is a row number of the CSV file (1 = best match) or a job link.
 
 The CV comes from --cv, or from stdin if no --cv is given:
   pbpaste | job_radar https://example.com/careers
@@ -81,10 +84,7 @@ pub fn parse_args() -> Res<Args> {
         print_usage_and_exit();
     }
 
-    let cv = match &flags.cv_path {
-        Some(path) => crate::cv::read(path)?,
-        None => read_piped_input()?,
-    };
+    let cv = read_cv(flags.cv_path.as_deref())?;
     if cv.trim().is_empty() {
         eprintln!("error: no CV given: use --cv <file> or pipe the CV into stdin\n\n{USAGE}");
         std::process::exit(1);
@@ -98,6 +98,72 @@ pub fn parse_args() -> Res<Args> {
         verbose: flags.verbose,
         print_results: flags.print_results,
         dump: flags.dump,
+    })
+}
+
+/// The CV from the file, or from stdin if no file is given. Empty if there is none.
+fn read_cv(path: Option<&str>) -> Res<String> {
+    match path {
+        Some(path) => crate::cv::read(path),
+        None => Ok(read_piped_input()?),
+    }
+}
+
+/// Options of the `application` command.
+pub struct ApplicationArgs {
+    pub cv: String,
+    /// The CSV file with the jobs.
+    pub jobs: String,
+    /// A row number of the CSV file (1 = best match) or a job link.
+    pub job: String,
+}
+
+#[derive(Debug, PartialEq)]
+struct ApplicationFlags {
+    cv_path: Option<String>,
+    jobs: String,
+    job: Option<String>,
+    help: bool,
+}
+
+fn parse_application_flags(args: impl IntoIterator<Item = String>) -> Res<ApplicationFlags> {
+    let mut flags = ApplicationFlags {
+        cv_path: None,
+        jobs: "jobs.csv".to_string(),
+        job: None,
+        help: false,
+    };
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--cv" => flags.cv_path = Some(args.next().ok_or("--cv needs a file path")?),
+            "--jobs" => flags.jobs = args.next().ok_or("--jobs needs a file path")?,
+            "-h" | "--help" => flags.help = true,
+            _ if arg.starts_with('-') => return Err(format!("unknown option: {arg}").into()),
+            _ if flags.job.is_some() => return Err("give only one job number or link".into()),
+            _ => flags.job = Some(arg),
+        }
+    }
+    Ok(flags)
+}
+
+/// Parses the arguments of the `application` command (after its name) and reads the CV.
+pub fn parse_application_args(args: &[String]) -> Res<ApplicationArgs> {
+    let flags = parse_application_flags(args.iter().cloned())?;
+    if flags.help {
+        print_usage_and_exit();
+    }
+    let job = flags.job.ok_or(
+        "usage: job_radar application [--cv <cv.txt|cv.pdf>] [--jobs <jobs.csv>] <number|url>",
+    )?;
+    let cv = read_cv(flags.cv_path.as_deref())?;
+    if cv.trim().is_empty() {
+        return Err("no CV given: use --cv <file> or pipe the CV into stdin".into());
+    }
+    Ok(ApplicationArgs {
+        cv,
+        jobs: flags.jobs,
+        job,
     })
 }
 
@@ -174,5 +240,19 @@ mod tests {
         assert_eq!(err(&["--out"]), "--out needs a file path");
         assert_eq!(err(&["--verbos"]), "unknown option: --verbos");
         assert_eq!(err(&["--dump"]), "--dump needs a folder");
+    }
+
+    #[test]
+    fn application_options() {
+        let parse = |args: &[&str]| parse_application_flags(args.iter().map(|a| a.to_string()));
+        let f = parse(&["3", "--cv", "cv.pdf"]).unwrap();
+        assert_eq!(f.job.as_deref(), Some("3"));
+        assert_eq!(f.cv_path.as_deref(), Some("cv.pdf"));
+        assert_eq!(f.jobs, "jobs.csv");
+        assert_eq!(parse(&["--jobs", "a.csv"]).unwrap().jobs, "a.csv");
+        assert!(parse(&[]).unwrap().job.is_none());
+        let err = |args: &[&str]| parse(args).unwrap_err().to_string();
+        assert_eq!(err(&["1", "2"]), "give only one job number or link");
+        assert_eq!(err(&["--out", "x"]), "unknown option: --out");
     }
 }

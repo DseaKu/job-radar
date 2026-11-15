@@ -2,7 +2,7 @@ mod input;
 
 use job_radar::backend::{Backend, Usage};
 use job_radar::config::{self, Config};
-use job_radar::{Level, Res, cv, fetch, ignore, jobs, run};
+use job_radar::{Level, Res, application, cv, fetch, ignore, jobs, run};
 
 /// How many of the best jobs the `--print-results` table shows.
 const TABLE_ROWS: usize = 10;
@@ -27,6 +27,10 @@ async fn main() -> Res<()> {
         println!("{text}");
         eprintln!("({} chars)", text.chars().count());
         return Ok(());
+    }
+
+    if argv.first().map(String::as_str) == Some("application") {
+        return application_command(&argv[1..], &http).await;
     }
 
     let args = input::parse_args()?;
@@ -58,6 +62,34 @@ async fn main() -> Res<()> {
     }
     if args.print_results && !outcome.rows.is_empty() {
         print!("\n{}", jobs::table(&outcome.rows, TABLE_ROWS));
+    }
+    Ok(())
+}
+
+/// `job_radar application <number|url>`: writes a cover letter for one job.
+async fn application_command(argv: &[String], http: &reqwest::Client) -> Res<()> {
+    let args = input::parse_application_args(argv)?;
+    // One short step: show all progress messages.
+    job_radar::set_logger(|_, msg| eprintln!("{msg}"));
+    // A job link works without a CSV file; a row number needs one.
+    let rows = if std::path::Path::new(&args.jobs).exists() {
+        jobs::read_csv(&args.jobs)?
+    } else if args.job.trim().parse::<usize>().is_ok() {
+        return Err(format!(
+            "{} does not exist: run a search first, or give a job link",
+            args.jobs
+        )
+        .into());
+    } else {
+        Vec::new()
+    };
+    let job = application::find_job(&rows, &args.job)?;
+    let config = Config::load()?;
+    let backend = Backend::from_config(&config)?;
+    let written = application::write(&backend, http, &config, &args.cv, &job).await?;
+    eprintln!("Wrote {}", written.letter.display());
+    if let Some(pdf) = &written.pdf {
+        eprintln!("Wrote {}", pdf.display());
     }
     Ok(())
 }

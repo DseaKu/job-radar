@@ -27,6 +27,10 @@ export const startRun = (cvPath: string, killDups: boolean) =>
 
 export const stopRun = () => invoke<void>("stop_run");
 
+/** Writes a cover letter for the job. Returns the full path of the PDF (or of the LaTeX file without LaTeX). */
+export const writeApplication = (cvPath: string, row: JobRow) =>
+  invoke<string>("write_application", { cvPath, row });
+
 export const openCsv = (path: string) => invoke<JobRow[]>("open_csv", { path });
 
 export const saveCsv = (path: string, rows: JobRow[]) => invoke<void>("save_csv", { path, rows });

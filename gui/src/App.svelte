@@ -3,6 +3,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { open, save } from "@tauri-apps/plugin-dialog";
+  import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import * as api from "./lib/api";
   import type { JobRow, LogLine, Progress, RunDone, Rule, Settings as SettingsData } from "./lib/types";
   import UploadBox from "./components/UploadBox.svelte";
@@ -35,7 +36,11 @@
   let rows = $state<JobRow[]>([]);
   let resultLabel = $state<string | null>(null);
   let selected = $state<JobRow | null>(null);
-  let notice = $state<{ kind: "info" | "error"; text: string } | null>(null);
+  /** A message above the results. `path`: a file that "Show in folder" reveals. */
+  let notice = $state<{ kind: "info" | "error"; text: string; path?: string } | null>(null);
+
+  // The cover letter that is being written
+  let writingFor = $state<JobRow | null>(null);
 
   let enabledSources = $derived(settings ? settings.sources.filter((s) => s.enabled).length : 0);
   let provider = $derived(settings ? settings.config.providers[settings.config.active] : null);
@@ -175,6 +180,33 @@
     }
   }
 
+  async function writeApplication(row: JobRow) {
+    if (!cvPath || writingFor) return;
+    writingFor = row;
+    notice = null;
+    try {
+      const path = await api.writeApplication(cvPath, $state.snapshot(row));
+      const name = row.title || row.company;
+      notice = path.endsWith(".pdf")
+        ? { kind: "info", text: `The application for "${name}" is ready: ${path}`, path }
+        : {
+            kind: "error",
+            text: `The LaTeX file for "${name}" is ready, but the PDF was not built (see the details): ${path}`,
+            path,
+          };
+    } catch (e) {
+      notice = { kind: "error", text: `The application was not written: ${api.errorText(e)}` };
+    } finally {
+      writingFor = null;
+    }
+  }
+
+  function writeState(row: JobRow) {
+    if (!cvPath || cvError) return "no-cv";
+    if (writingFor === row) return "writing";
+    return writingFor ? "busy" : "ready";
+  }
+
   async function closeSettings() {
     view = "main";
     await refreshSettings();
@@ -264,6 +296,10 @@
       {#if notice}
         <div class="notice" class:error={notice.kind === "error"}>
           <span class="grow">{notice.text}</span>
+          {#if notice.path}
+            {@const path = notice.path}
+            <button class="btn" onclick={() => revealItemInDir(path)}>Show in folder</button>
+          {/if}
           <button class="btn btn-ghost btn-icon" aria-label="Close" onclick={() => (notice = null)}>✕</button>
         </div>
       {/if}
@@ -273,7 +309,9 @@
         {#if selected}
           <JobDetails
             row={selected}
+            writeState={writeState(selected)}
             onClose={() => (selected = null)}
+            onWriteApplication={() => selected && writeApplication(selected)}
             onIgnoreJob={() => selected && ignore(selected, "job")}
             onIgnoreCompany={() => selected && ignore(selected, "company")}
           />

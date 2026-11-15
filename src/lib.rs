@@ -54,6 +54,7 @@ macro_rules! warn {
     };
 }
 
+pub mod application;
 pub mod backend;
 pub mod config;
 pub mod cv;

@@ -15,7 +15,7 @@ use job_radar::backend::{Backend, Usage};
 use job_radar::config::{self, Config, Source, SourcesFile};
 use job_radar::ignore::{self, Rule};
 use job_radar::jobs::{self, JobRow};
-use job_radar::{Level, cv, fetch, run};
+use job_radar::{Level, application, cv, fetch, run};
 use serde::{Deserialize, Serialize};
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -438,6 +438,25 @@ fn stop_run(app: AppHandle, state: State<'_, RunState>) -> CmdRes<()> {
     Ok(())
 }
 
+/// Writes a cover letter for one job into a new folder in `applications_dir`.
+/// Returns the full path of the PDF, or of the LaTeX file if no PDF was built.
+#[tauri::command]
+async fn write_application(cv_path: String, row: JobRow) -> CmdRes<String> {
+    let cv = read_cv(&cv_path).map_err(text)?;
+    let config = Config::load().map_err(text)?;
+    let env_file = read_env_file();
+    let backend =
+        Backend::from_config_with_keys(&config, |var| key_lookup(&env_file, var)).map_err(text)?;
+    let http = job_radar::http_client().map_err(text)?;
+    let written = application::write(&backend, &http, &config, &cv, &row)
+        .await
+        .map_err(text)?;
+    // The PDF if LaTeX built it, else the LaTeX file.
+    let file = written.pdf.unwrap_or(written.letter);
+    let file = file.canonicalize().unwrap_or(file);
+    Ok(file.display().to_string())
+}
+
 #[tauri::command]
 fn open_csv(path: String) -> CmdRes<Vec<JobRow>> {
     jobs::read_csv(&path).map_err(text)
@@ -483,6 +502,7 @@ pub fn run() {
             ollama_models,
             start_run,
             stop_run,
+            write_application,
             open_csv,
             save_csv,
         ])

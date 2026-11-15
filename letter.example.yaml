@@ -1,0 +1,55 @@
+# Template for your cover letters. Copy it, then change the copy:
+#
+#   cp letter.example.yaml letter.yaml
+#
+# Git ignores letter.yaml, so your data stays private.
+# Without letter.yaml, the AI takes your data from the CV and the built-in layout applies.
+# Use another file with JOB_RADAR_LETTER=<path>. All fields are optional.
+
+# Your data. A value here replaces the value that the AI takes from the CV.
+sender:
+  name: Jane Doe
+  address:
+    - Hauptstraße 1
+    - 44787 Bochum
+  phone: +49 123 456789
+  email: jane.doe@example.com
+
+# The enclosures in each letter. Empty: the AI writes them.
+enclosures: Lebenslauf, Zeugnisse
+
+# Your own LaTeX document. Empty (or no `template` key): the built-in layout applies.
+# job_radar replaces these placeholders. All values are already escaped for LaTeX:
+#   {{ sender_name }}  {{ sender_address }}  {{ sender_phone }}  {{ sender_email }}
+#   {{ recipient }}    {{ subject }}         {{ opening }}       {{ body }}
+#   {{ closing }}      {{ enclosures }}      {{ language }}      {{ job_title }}
+#   {{ company }}
+# Lines in {{ sender_address }} and {{ recipient }} are separated by \\.
+# {{ body }} holds the paragraphs, separated by empty lines. It is required.
+# {{ language }} is the babel name of the letter's language (for example ngerman, english).
+# This example is the built-in layout:
+template: |
+  \documentclass[paper=a4, fontsize=11pt, parskip=half, fromalign=right,
+                 fromphone=true, fromemail=true]{scrlttr2}
+  \usepackage[T1]{fontenc}
+  \usepackage{lmodern}
+  \usepackage[{{ language }}]{babel}
+
+  \setkomavar{fromname}{{{ sender_name }}}
+  \setkomavar{fromaddress}{{{ sender_address }}}
+  \setkomavar{fromphone}{{{ sender_phone }}}
+  \setkomavar{fromemail}{{{ sender_email }}}
+  \setkomavar{subject}{{{ subject }}}
+
+  \begin{document}
+  \begin{letter}{{{ recipient }}}
+
+  \opening{{{ opening }}}
+
+  {{ body }}
+
+  \closing{{{ closing }}}
+
+  \encl{{{ enclosures }}}
+  \end{letter}
+  \end{document}
