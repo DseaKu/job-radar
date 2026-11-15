@@ -7,8 +7,9 @@ rates each job against your CV (0 to 100, with a short reason), and writes a CSV
 (best match first).
 
 ![The desktop app: drop the CV, find jobs, read why a job fits](demo/gui.gif)
+<sub>The GIF uses fictional demo data. The career pages run on a local test server.</sub>
 
-_The GIF uses fictional demo data. The career pages run on a local test server_
+## How it works
 
 ```mermaid
 flowchart LR
