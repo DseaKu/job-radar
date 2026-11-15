@@ -13,6 +13,8 @@ export interface ProviderConfig {
   temperature?: number | null;
   /** Extra top-level fields for the JSON body of each request. */
   extra_body?: Record<string, unknown> | null;
+  /** Upper limit in seconds for one request. */
+  timeout?: number | null;
 }
 
 export interface Config {
@@ -132,6 +134,12 @@ export const DEFAULT_CONTEXT: Record<ProviderKind, number> = {
   ollama: 32768,
   openai: 128000,
   anthropic: 200000,
+};
+
+export const DEFAULT_TIMEOUT: Record<ProviderKind, number> = {
+  ollama: 600,
+  openai: 300,
+  anthropic: 300,
 };
 
 export const KIND_LABEL: Record<ProviderKind, string> = {

@@ -25,6 +25,9 @@ const ENV_FILE: &str = ".env";
 
 type CmdRes<T> = Result<T, String>;
 
+/// Upper limit in seconds for "Test connection".
+const TEST_TIMEOUT: u32 = 60;
+
 fn text(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
@@ -275,7 +278,15 @@ fn add_ignore_rule(rule: Rule) -> CmdRes<Vec<Rule>> {
 
 /// Sends one short request to the provider and returns its reply.
 #[tauri::command]
-async fn test_connection(config: Config, api_keys: BTreeMap<String, String>) -> CmdRes<String> {
+async fn test_connection(mut config: Config, api_keys: BTreeMap<String, String>) -> CmdRes<String> {
+    // A one-word reply is fast: do not wait the full timeout of a long search request.
+    if let Some(p) = config.providers.get_mut(&config.active) {
+        p.timeout = Some(
+            p.timeout
+                .unwrap_or(p.kind.default_timeout())
+                .min(TEST_TIMEOUT),
+        );
+    }
     let backend =
         Backend::from_config_with_keys(&config, |var| key_lookup(&api_keys, var)).map_err(text)?;
     let reply = backend

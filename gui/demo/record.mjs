@@ -15,13 +15,14 @@ import { fileURLToPath } from "node:url";
 
 const GUI = resolve(fileURLToPath(import.meta.url), "../..");
 const OUT = resolve(GUI, "../demo/gui.gif");
-const SIZE = { width: 1100, height: 660 };
+const SIZE = { width: 1100, height: 720 };
 const FPS = 12;
 const GIF_WIDTH = 900;
 
 const server = await createServer({ root: GUI, logLevel: "warn", server: { port: 1421, strictPort: true } });
 await server.listen();
-const browser = await chromium.launch();
+// CHROMIUM: an optional path to a Chromium binary, if "npx playwright install" does not work.
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const frames = mkdtempSync(join(tmpdir(), "job-radar-gif-"));
 
 try {
@@ -66,7 +67,9 @@ try {
   await sleep(500);
   await click(page, page.locator("summary"));
   await page.getByText("Found 6 jobs").waitFor({ timeout: 20000 });
-  await sleep(1500);
+  await sleep(1200);
+  await click(page, page.locator("summary")); // close the log again, to give the table room
+  await sleep(1000);
 
   // 3. Open the best match.
   await click(page, page.locator("tbody tr").first());

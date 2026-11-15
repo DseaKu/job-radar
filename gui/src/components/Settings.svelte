@@ -61,7 +61,7 @@
       const [s, info] = await Promise.all([api.loadSettings(), api.appInfo()]);
       // All optional fields exist, so that the form does not change the draft by itself.
       for (const [name, pc] of Object.entries(s.config.providers)) {
-        for (const key of ["base_url", "api_key_env", "max_tokens", "effort", "context_length", "temperature"] as const) {
+        for (const key of ["base_url", "api_key_env", "max_tokens", "effort", "context_length", "temperature", "timeout"] as const) {
           pc[key] ??= null;
         }
         pc.extra_body ??= null;
@@ -104,6 +104,7 @@
       effort: text(p.effort),
       context_length: num(p.context_length),
       temperature: num(p.temperature),
+      timeout: num(p.timeout),
       extra_body: p.extra_body ?? null,
     };
   }
