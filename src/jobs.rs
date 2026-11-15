@@ -193,7 +193,7 @@ fn to_row(job: &Value, source: &str) -> JobRow {
     JobRow {
         match_score: job["match_score"]
             .as_i64()
-            .or_else(|| job["match_score"].as_f64().map(|f| f.round() as i64))
+            .or_else(|| job["match_score"].as_f64().map(score_from_float))
             .or_else(|| {
                 job["match_score"]
                     .as_str()
@@ -206,6 +206,16 @@ fn to_row(job: &Value, source: &str) -> JobRow {
         match_reason: field(job, "match_reason"),
         url: if url.is_empty() { link } else { url },
         source: source.to_string(),
+    }
+}
+
+/// Some models write the score from 0 to 1 (0.45) instead of 0 to 100. A number with a
+/// decimal point from 0 to 1 becomes 0 to 100; 1.0 is 100.
+fn score_from_float(f: f64) -> i64 {
+    if (0.0..=1.0).contains(&f) {
+        (f * 100.0).round() as i64
+    } else {
+        f.round() as i64
     }
 }
 
@@ -528,6 +538,17 @@ mod tests {
         let extra = system_prompt("English", "Rate remote jobs 10 points higher.\n");
         assert!(extra.contains("in English."));
         assert!(extra.ends_with("keep the JSON format above:\nRate remote jobs 10 points higher."));
+    }
+
+    #[test]
+    fn scores_from_0_to_1_become_0_to_100() {
+        let score = |json: &str| to_row(&serde_json::from_str(json).unwrap(), "s").match_score;
+        assert_eq!(score(r#"{"match_score": 0.45}"#), Some(45));
+        assert_eq!(score(r#"{"match_score": 1.0}"#), Some(100));
+        assert_eq!(score(r#"{"match_score": 1}"#), Some(1));
+        assert_eq!(score(r#"{"match_score": 72}"#), Some(72));
+        assert_eq!(score(r#"{"match_score": 72.6}"#), Some(73));
+        assert_eq!(score(r#"{"match_score": "80"}"#), Some(80));
     }
 
     #[test]

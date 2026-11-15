@@ -84,6 +84,8 @@ pub struct Backend {
     extra_body: BTreeMap<String, Value>,
     /// Upper limit in seconds for one request.
     timeout: u32,
+    /// openai: read the reply as a stream (server-sent events).
+    stream: bool,
     /// Token totals over all calls of this run.
     total_in: AtomicU64,
     total_out: AtomicU64,
@@ -141,6 +143,7 @@ impl Backend {
                 .timeout(std::time::Duration::from_secs(timeout.into()))
                 .build()?,
             timeout,
+            stream: p.stream.unwrap_or(false),
             base_url,
             api_key,
             model: p.model.clone(),
@@ -179,6 +182,9 @@ impl Backend {
             .json(&self.openai_body(system, user));
         if let Some(key) = &self.api_key {
             request = request.bearer_auth(key);
+        }
+        if self.stream {
+            return self.read_openai_stream(request).await;
         }
         self.read_openai(&self.send(request).await?)
     }
@@ -253,8 +259,47 @@ impl Backend {
         if let Some(t) = self.temperature {
             body["temperature"] = json!(t);
         }
+        if self.stream {
+            body["stream"] = json!(true);
+        }
         merge_extra(&mut body, &self.extra_body);
         body
+    }
+
+    /// Sends a streaming request and joins the parts of the reply.
+    async fn read_openai_stream(&self, request: reqwest::RequestBuilder) -> Res<String> {
+        let mut response = request.send().await.map_err(|e| self.request_error(&e))?;
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.map_err(|e| self.request_error(&e))?;
+            return Err(self.http_error(status, &text).into());
+        }
+        let mut stream = StreamReply::default();
+        let mut buf: Vec<u8> = Vec::new();
+        'read: while let Some(chunk) = response.chunk().await.map_err(|e| self.request_error(&e))? {
+            buf.extend_from_slice(&chunk);
+            // Only complete lines: a chunk can end inside a line or inside a UTF-8 character.
+            while let Some(end) = buf.iter().position(|&b| b == b'\n') {
+                let line: Vec<u8> = buf.drain(..=end).collect();
+                if stream.line(&String::from_utf8_lossy(&line), &self.name)? {
+                    break 'read;
+                }
+            }
+        }
+        if !buf.is_empty() {
+            stream.line(&String::from_utf8_lossy(&buf), &self.name)?;
+        }
+        self.record_usage(
+            &stream.usage["prompt_tokens"],
+            &stream.usage["completion_tokens"],
+        );
+        if stream.finish_reason.as_deref() == Some("length") {
+            return Err(self.cut_off(&stream.content));
+        }
+        if stream.content.is_empty() && stream.finish_reason.is_none() {
+            return Err(format!("{}: the stream ended without a reply", self.name).into());
+        }
+        Ok(strip_think(&stream.content))
     }
 
     fn read_openai(&self, payload: &Value) -> Res<String> {
@@ -413,6 +458,16 @@ impl Backend {
         Ok(payload)
     }
 
+    /// The message for an HTTP error status with the reply text (JSON or an HTML page).
+    fn http_error(&self, status: reqwest::StatusCode, text: &str) -> String {
+        let payload: Value =
+            serde_json::from_str(text).unwrap_or_else(|_| Value::String(preview(text)));
+        format!(
+            "API request failed ({status}): {payload}{}",
+            status_hint(status.as_u16(), &self.name)
+        )
+    }
+
     /// A readable message for a request without an HTTP reply: timeout, no connection and so on.
     /// reqwest's own message ("error sending request") hides the cause, so the causes are added.
     fn request_error(&self, e: &reqwest::Error) -> String {
@@ -441,12 +496,59 @@ impl Backend {
     }
 }
 
+/// The reply of an OpenAI-compatible stream (server-sent events), joined line by line.
+#[derive(Default)]
+struct StreamReply {
+    content: String,
+    finish_reason: Option<String>,
+    usage: Value,
+}
+
+impl StreamReply {
+    /// Reads one line of the stream. Returns true at the end (`data: [DONE]`).
+    /// An error event in the stream becomes an error.
+    fn line(&mut self, line: &str, name: &str) -> Res<bool> {
+        let Some(data) = line.trim().strip_prefix("data:") else {
+            return Ok(false); // empty lines, comments (": ping") and other fields
+        };
+        let data = data.trim();
+        if data == "[DONE]" {
+            return Ok(true);
+        }
+        let Ok(event) = serde_json::from_str::<Value>(data) else {
+            return Ok(false);
+        };
+        if !event["error"].is_null() {
+            let hint = match event["error"]["code"].as_u64() {
+                Some(code) => status_hint(code as u16, name),
+                None => String::new(),
+            };
+            return Err(format!("API error in the stream: {}{hint}", event["error"]).into());
+        }
+        let choice = &event["choices"][0];
+        if let Some(text) = choice["delta"]["content"].as_str() {
+            self.content.push_str(text);
+        }
+        if let Some(reason) = choice["finish_reason"].as_str() {
+            self.finish_reason = Some(reason.to_string());
+        }
+        if event["usage"].is_object() {
+            self.usage = event["usage"].clone();
+        }
+        Ok(false)
+    }
+}
+
 /// A hint for an HTTP error status, or "".
 fn status_hint(status: u16, name: &str) -> String {
     let hint = match status {
         401 | 403 => "the API key is wrong or has no access; check it in .env",
         404 => "the base URL or the model name is wrong",
         408 | 504 => "the provider did not answer in time; try again later",
+        524 => {
+            "the provider needed more than about 100 seconds and its proxy (Cloudflare) stopped \
+             the request; a smaller context_length makes each request smaller and faster"
+        }
         429 => "too many requests or no credit left; wait a moment or check your account",
         500..=599 => "the provider has a problem; try again later or use another provider",
         _ => return String::new(),
@@ -549,7 +651,62 @@ mod tests {
              (hint for p: the provider has a problem; try again later or use another provider)"
         );
         assert!(status_hint(401, "p").contains(".env"));
+        assert!(status_hint(524, "p").contains("context_length"));
         assert_eq!(status_hint(400, "p"), "");
+    }
+
+    #[tokio::test]
+    async fn stream_reply_is_joined() {
+        // Two lines, one of them with a UTF-8 character; a ping comment; usage; [DONE].
+        let url = server(
+            "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\n\r\n\
+             : ping\n\n\
+             data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\n\
+             data: {\"choices\":[{\"delta\":{\"content\":\"[{\\\"title\\\": \"},\"finish_reason\":null}]}\n\n\
+             data: {\"choices\":[{\"delta\":{\"content\":\"\\\"Entwickler äöü\\\"}]\"},\"finish_reason\":\"stop\"}]}\n\n\
+             data: {\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":7}}\n\n\
+             data: [DONE]\n\n",
+            0,
+        )
+        .await;
+        let b = backend_at(&url, "    stream: true\n");
+        assert_eq!(b.openai_body("s", "u")["stream"], true);
+        let reply = b.chat("s", "u").await.unwrap();
+        assert_eq!(reply, "[{\"title\": \"Entwickler äöü\"}]");
+        assert_eq!(b.usage().input, 12);
+        assert_eq!(b.usage().output, 7);
+
+        // Without stream, the body has no stream field.
+        assert!(
+            backend_at(&url, "")
+                .openai_body("s", "u")
+                .get("stream")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn stream_errors_and_cut_off() {
+        let mut s = StreamReply::default();
+        let err = s
+            .line(
+                r#"data: {"error":{"code":503,"message":"The service could not complete this request."}}"#,
+                "p",
+            )
+            .unwrap_err()
+            .to_string();
+        assert!(err.starts_with("API error in the stream: {"), "{err}");
+        assert!(err.contains("the provider has a problem"), "{err}");
+
+        let mut s = StreamReply::default();
+        s.line(
+            r#"data: {"choices":[{"delta":{"content":"[{"},"finish_reason":"length"}]}"#,
+            "p",
+        )
+        .unwrap();
+        assert_eq!(s.finish_reason.as_deref(), Some("length"));
+        assert!(s.line("data: [DONE]", "p").unwrap());
+        assert!(!s.line("event: message", "p").unwrap());
     }
 
     #[test]

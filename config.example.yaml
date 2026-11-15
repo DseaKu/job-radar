@@ -60,6 +60,8 @@ application_instructions: ""
 #                  (default: the provider's own default)
 #   timeout      - upper limit in seconds for one AI request (default: ollama 600, others 300).
 #                  After it, the request stops with a clear error instead of waiting.
+#   stream       - openai only: true reads the reply as a stream. Use it if requests fail with
+#                  HTTP 524 or stop after about 100 seconds (a proxy such as Cloudflare).
 #   extra_body   - extra top-level fields for the JSON body of each request, for example
 #                  extra_body: {"mode": "non-private"}. A field that the request already has
 #                  is replaced. Do not put API keys here: they stay in .env.

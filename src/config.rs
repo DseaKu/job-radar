@@ -200,6 +200,10 @@ pub struct ProviderConfig {
     /// Without it: 600 for ollama (a local model can be slow), 300 for the others.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<u32>,
+    /// openai only: read the reply as a stream. Some proxies (for example Cloudflare) stop a
+    /// request without a first byte after about 100 seconds; a stream sends bytes early.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -262,6 +266,7 @@ impl Default for Config {
             temperature: None,
             extra_body: None,
             timeout: None,
+            stream: None,
         };
         Self {
             active: "local".to_string(),

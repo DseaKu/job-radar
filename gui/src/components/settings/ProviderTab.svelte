@@ -244,6 +244,18 @@
             </label>
           {/if}
         </div>
+        {#if p.type === "openai"}
+          <label class="check">
+            <input type="checkbox" checked={!!p.stream} onchange={(e) => p && (p.stream = e.currentTarget.checked || null)} />
+            <span>
+              <strong>Streaming</strong><br />
+              <span class="hint">
+                Read the reply in parts while the model writes it. Turn it on if requests fail with 524 or time out
+                after about 100 seconds: the provider then sends data early, so its proxy does not stop the request.
+              </span>
+            </span>
+          </label>
+        {/if}
         <label class="field">
           <span>Extra request body (JSON)</span>
           <textarea

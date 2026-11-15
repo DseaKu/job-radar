@@ -15,6 +15,8 @@ export interface ProviderConfig {
   extra_body?: Record<string, unknown> | null;
   /** Upper limit in seconds for one request. */
   timeout?: number | null;
+  /** openai only: read the reply as a stream. */
+  stream?: boolean | null;
 }
 
 export interface Config {

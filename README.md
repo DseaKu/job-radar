@@ -8,6 +8,8 @@ rates each job against your CV (0 to 100, with a short reason), and writes a CSV
 
 ![The desktop app: drop the CV, find jobs, read why a job fits](demo/gui.gif)
 
+_The GIF uses fictional demo data. The career pages run on a local test server_
+
 ```mermaid
 flowchart LR
     CV["📄 CV<br/>text, PDF or clipboard"] --> LLM
@@ -37,7 +39,8 @@ In _Settings_, select the provider, paste the API key and add your search pages.
 Then drop your CV into the window and click _Find jobs_. To write a cover letter
 (LaTeX) for a job, select it and click _Write application_. To build the app
 yourself: `cd gui && npm install && npm run tauri build` (needs Rust, Node.js
-and on Linux the [Tauri packages](https://v2.tauri.app/start/prerequisites/#linux)).
+and on Linux the
+[Tauri packages](https://v2.tauri.app/start/prerequisites/#linux)).
 
 ### Docker (recommended for the command line)
 
@@ -94,8 +97,9 @@ providers:
     type: openai
     model: leiolai-1
     base_url: https://api.leiolai.com/v1
-    api_key_env: LEIOLAI_API_KEY   # the key itself stays in .env
-    extra_body: {"mode": "non-private"}
+    api_key_env: LEIOLAI_API_KEY # the key itself stays in .env
+    extra_body: { "mode": "private" }
+    stream: true # Leiolai is slow: without a stream, Cloudflare stops long requests (HTTP 524)
 ```
 
 ## Limitations
@@ -107,9 +111,9 @@ providers:
 ## More
 
 - Docs: [Sources](docs/sources.md) · [Ignore list](docs/ignore-list.md) ·
-  [Applications](docs/applications.md) ·
-  [Providers](docs/providers.md) · [Docker](docs/docker.md) ·
-  [How it works](docs/how-it-works.md) · [Testing](docs/testing.md)
+  [Applications](docs/applications.md) · [Providers](docs/providers.md) ·
+  [Docker](docs/docker.md) · [How it works](docs/how-it-works.md) ·
+  [Testing](docs/testing.md)
 - Built with Rust (tokio, reqwest, serde, csv, pdf-extract, dotenvy) and Tauri.
   The HTML-to-text parser is in `src/fetch.rs`.
 - License: [MIT](LICENSE)

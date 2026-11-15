@@ -65,6 +65,7 @@
           pc[key] ??= null;
         }
         pc.extra_body ??= null;
+        pc.stream ??= null;
         extraTexts[name] = pc.extra_body ? JSON.stringify(pc.extra_body, null, 2) : "";
       }
       for (const r of s.ignore) {
@@ -105,6 +106,7 @@
       context_length: num(p.context_length),
       temperature: num(p.temperature),
       timeout: num(p.timeout),
+      stream: p.type === "openai" && p.stream ? true : null,
       extra_body: p.extra_body ?? null,
     };
   }
