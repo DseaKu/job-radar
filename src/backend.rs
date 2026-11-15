@@ -12,6 +12,37 @@ const DEFAULT_MAX_TOKENS: u32 = 4096;
 /// for German text and long URLs.
 const CHARS_PER_TOKEN: usize = 3;
 
+/// Token counts. `Backend::usage()` gives the totals of this run; the difference of two
+/// snapshots gives the usage of one step (for example one website).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Usage {
+    pub input: u64,
+    pub output: u64,
+    pub calls: u64,
+}
+
+impl std::ops::Sub for Usage {
+    type Output = Usage;
+    fn sub(self, before: Usage) -> Usage {
+        Usage {
+            input: self.input.saturating_sub(before.input),
+            output: self.output.saturating_sub(before.output),
+            calls: self.calls.saturating_sub(before.calls),
+        }
+    }
+}
+
+impl std::ops::Add for Usage {
+    type Output = Usage;
+    fn add(self, other: Usage) -> Usage {
+        Usage {
+            input: self.input + other.input,
+            output: self.output + other.output,
+            calls: self.calls + other.calls,
+        }
+    }
+}
+
 /// The reply hit `max_tokens` and is not complete. `partial` holds the text up to the cut.
 #[derive(Debug)]
 pub struct ReplyCutOff {
@@ -288,14 +319,13 @@ impl Backend {
         window.saturating_sub(used) * CHARS_PER_TOKEN
     }
 
-    /// A one-line summary of the token usage over all calls of this run.
-    pub fn usage_summary(&self) -> String {
-        format!(
-            "Total usage: {} input tokens, {} output tokens ({} AI calls)",
-            self.total_in.load(Ordering::Relaxed),
-            self.total_out.load(Ordering::Relaxed),
-            self.calls.load(Ordering::Relaxed),
-        )
+    /// The token totals over all calls of this run so far.
+    pub fn usage(&self) -> Usage {
+        Usage {
+            input: self.total_in.load(Ordering::Relaxed),
+            output: self.total_out.load(Ordering::Relaxed),
+            calls: self.calls.load(Ordering::Relaxed),
+        }
     }
 
     /// A short label for the active provider and model, for logging.
@@ -362,10 +392,12 @@ mod tests {
             "prompt_eval_count": 40, "eval_count": 7, "done_reason": "stop"
         });
         assert_eq!(b.read_ollama(&reply).unwrap(), "[1]");
-        assert_eq!(
-            b.usage_summary(),
-            "Total usage: 40 input tokens, 7 output tokens (1 AI calls)"
-        );
+        let usage = Usage {
+            input: 40,
+            output: 7,
+            calls: 1,
+        };
+        assert_eq!(b.usage(), usage);
     }
 
     #[test]
@@ -392,10 +424,12 @@ mod tests {
             json!({ "choices": [{ "message": { "content": "[{" }, "finish_reason": "length" }] });
         assert_eq!(cut_off(b.read_openai(&cut)).partial, "[{");
         assert!(b.read_openai(&json!({ "error": "x" })).is_err());
-        assert!(
-            b.usage_summary()
-                .contains("12 input tokens, 3 output tokens (3 AI calls)")
-        );
+        let usage = Usage {
+            input: 12,
+            output: 3,
+            calls: 3,
+        };
+        assert_eq!(b.usage(), usage);
     }
 
     #[test]
@@ -417,10 +451,12 @@ mod tests {
                        "cache_creation_input_tokens": 5, "output_tokens": 8 }
         });
         assert_eq!(b.read_anthropic(&ok).unwrap(), "[1,2]");
-        assert!(
-            b.usage_summary()
-                .starts_with("Total usage: 105 input tokens, 8 output tokens")
-        );
+        let usage = Usage {
+            input: 105,
+            output: 8,
+            calls: 1,
+        };
+        assert_eq!(b.usage(), usage);
 
         let cut =
             json!({ "content": [{ "type": "text", "text": "[{" }], "stop_reason": "max_tokens" });

@@ -27,10 +27,10 @@ mod jobs;
 
 use std::time::Duration;
 
-use backend::Backend;
+use backend::{Backend, Usage};
 use config::Config;
 
-/// How many of the best jobs the summary table at the end of a run shows.
+/// How many of the best jobs the `--print-results` table shows.
 const TABLE_ROWS: usize = 10;
 
 pub type Res<T> = Result<T, Box<dyn std::error::Error>>;
@@ -73,8 +73,11 @@ async fn main() -> Res<()> {
 
     let mut rows = Vec::new();
     let mut failed = 0;
+    // Token usage of each step, for the table at the end.
+    let mut usage: Vec<(String, Usage)> = Vec::new();
     for (name, url) in &targets {
         info!("Reading {name} ...");
+        let before = backend.usage();
         match jobs::from_url(&backend, &http, &args.cv, url, &config.output_language).await {
             Ok(found) => {
                 info!("  {} jobs found", found.len());
@@ -89,6 +92,7 @@ async fn main() -> Res<()> {
                 failed += 1;
             }
         }
+        usage.push((name.clone(), backend.usage() - before));
     }
 
     // Remove ignored jobs before the dedup step, so that it gets fewer rows.
@@ -103,7 +107,13 @@ async fn main() -> Res<()> {
     if args.kill_dups && rows.len() > 1 {
         info!("Removing duplicates ...");
         let before = rows.len();
-        match dedup::find_dups(&backend, &rows).await {
+        let usage_before = backend.usage();
+        let result = dedup::find_dups(&backend, &rows).await;
+        usage.push((
+            "duplicate check".to_string(),
+            backend.usage() - usage_before,
+        ));
+        match result {
             Ok(groups) => {
                 rows = dedup::merge(rows, groups);
                 info!("  {} duplicates removed", before - rows.len());
@@ -114,8 +124,10 @@ async fn main() -> Res<()> {
 
     jobs::write_csv(&args.out, &mut rows)?;
     eprintln!("Wrote {} jobs to {}", rows.len(), args.out);
-    info!("{}", backend.usage_summary());
-    if verbose() && !rows.is_empty() {
+    if verbose() {
+        eprint!("\n{}", usage_table(&usage));
+    }
+    if args.print_results && !rows.is_empty() {
         print!("\n{}", jobs::table(&rows, TABLE_ROWS));
     }
 
@@ -148,6 +160,38 @@ fn select_targets(
     Ok(targets)
 }
 
+/// A table of the token usage of each step, with a total row if there is more than one step.
+fn usage_table(steps: &[(String, Usage)]) -> String {
+    const MAX_NAME: usize = 30;
+    let name = |n: &str| {
+        if n.chars().count() <= MAX_NAME {
+            n.to_string()
+        } else {
+            format!("{}…", n.chars().take(MAX_NAME - 1).collect::<String>())
+        }
+    };
+    let total = steps
+        .iter()
+        .fold(Usage::default(), |sum, (_, u)| sum + u.to_owned());
+    let mut lines: Vec<(String, Usage)> = steps.iter().map(|(n, u)| (name(n), *u)).collect();
+    if steps.len() > 1 {
+        lines.push(("total".to_string(), total));
+    }
+    let w = lines
+        .iter()
+        .map(|(n, _)| n.chars().count())
+        .fold("Token usage".len(), usize::max);
+
+    let mut out = format!(
+        "{:<w$}  {:>9}  {:>9}  {:>5}\n",
+        "Token usage", "input", "output", "calls"
+    );
+    for (n, u) in &lines {
+        out += &format!("{n:<w$}  {:>9}  {:>9}  {:>5}\n", u.input, u.output, u.calls);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,6 +203,27 @@ mod tests {
             url: format!("https://{name}.de"),
             enabled,
         }
+    }
+
+    #[test]
+    fn usage_table_has_one_row_per_step_and_a_total() {
+        let u = |input, output, calls| Usage {
+            input,
+            output,
+            calls,
+        };
+        let text = usage_table(&[
+            ("Arbeitsagentur".into(), u(5501, 2597, 1)),
+            ("StepStone".into(), u(12000, 3000, 2)),
+            ("duplicate check".into(), u(800, 50, 1)),
+        ]);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 5);
+        assert_eq!(lines[0], "Token usage          input     output  calls");
+        assert_eq!(lines[1], "Arbeitsagentur        5501       2597      1");
+        assert_eq!(lines[4], "total                18301       5647      4");
+        // One step: no total row.
+        assert_eq!(usage_table(&[("A".into(), u(1, 2, 1))]).lines().count(), 2);
     }
 
     #[test]

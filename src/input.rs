@@ -10,18 +10,20 @@ pub struct Args {
     pub out: String,
     pub kill_dups: bool,
     pub verbose: bool,
+    pub print_results: bool,
 }
 
 const USAGE: &str = "\
-Usage: job_radar [--cv <cv.txt|cv.pdf>] [--out <jobs.csv>] [--kill-dups] [-v] [<url> ...]
+Usage: job_radar [--cv <cv.txt|cv.pdf>] [--out <jobs.csv>] [--kill-dups] [-v] [-p] [<url> ...]
        job_radar convert-cv <cv.pdf> [<cv.txt>]
        job_radar page-text <url>
 
 Without URLs, the enabled sources in sources.yaml are read.
 `page-text` prints the text the AI would see (no AI call), to test a new source.
 `--kill-dups` makes one more AI call that merges the same job found on several platforms.
-`-v`, `--verbose` shows the progress, the token usage and a table of the best jobs.
-Without it, only warnings, errors and the result line are shown.
+`-v`, `--verbose` shows the progress and the token usage.
+`-p`, `--print-results` prints a table of the best jobs to stdout.
+Without them, only warnings, errors and the result line are shown.
 
 The CV comes from --cv, or from stdin if no --cv is given:
   pbpaste | job_radar https://example.com/careers
@@ -35,6 +37,7 @@ struct Flags {
     urls: Vec<String>,
     kill_dups: bool,
     verbose: bool,
+    print_results: bool,
     help: bool,
 }
 
@@ -46,6 +49,7 @@ fn parse_flags(args: impl IntoIterator<Item = String>) -> Res<Flags> {
         urls: Vec::new(),
         kill_dups: false,
         verbose: false,
+        print_results: false,
         help: false,
     };
     let mut args = args.into_iter();
@@ -55,6 +59,7 @@ fn parse_flags(args: impl IntoIterator<Item = String>) -> Res<Flags> {
             "--out" | "-o" => flags.out = args.next().ok_or("--out needs a file path")?,
             "--kill-dups" => flags.kill_dups = true,
             "-v" | "--verbose" => flags.verbose = true,
+            "-p" | "--print-results" => flags.print_results = true,
             "-h" | "--help" | "help" => flags.help = true,
             _ if arg.starts_with('-') => return Err(format!("unknown option: {arg}").into()),
             _ => flags.urls.push(arg),
@@ -85,6 +90,7 @@ pub fn parse_args() -> Res<Args> {
         out: flags.out,
         kill_dups: flags.kill_dups,
         verbose: flags.verbose,
+        print_results: flags.print_results,
     })
 }
 
@@ -117,7 +123,7 @@ mod tests {
     fn defaults() {
         let f = parse(&[]).unwrap();
         assert_eq!(f.out, "jobs.csv");
-        assert!(f.cv_path.is_none() && f.urls.is_empty() && !f.kill_dups && !f.verbose && !f.help);
+        assert!(f.cv_path.is_none() && f.urls.is_empty() && !f.kill_dups && !f.verbose && !f.print_results && !f.help);
     }
 
     #[test]
@@ -125,6 +131,7 @@ mod tests {
         let f = parse(&[
             "https://a.de/jobs",
             "-v",
+            "-p",
             "--cv",
             "cv.txt",
             "-o",
@@ -136,8 +143,9 @@ mod tests {
         assert_eq!(f.cv_path.as_deref(), Some("cv.txt"));
         assert_eq!(f.out, "out.csv");
         assert_eq!(f.urls, ["https://a.de/jobs", "https://b.de/careers"]);
-        assert!(f.kill_dups && f.verbose && !f.help);
+        assert!(f.kill_dups && f.verbose && f.print_results && !f.help);
         assert!(parse(&["--verbose", "--out", "x.csv"]).unwrap().verbose);
+        assert!(parse(&["--print-results"]).unwrap().print_results);
         assert!(parse(&["help"]).unwrap().help);
     }
 
