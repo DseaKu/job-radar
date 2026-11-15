@@ -49,6 +49,7 @@ pub async fn from_text(
     url: &str,
     text: &str,
     language: &str,
+    extra_instructions: &str,
 ) -> Res<Vec<JobRow>> {
     if text.trim().is_empty() {
         return Err(format!(
@@ -57,10 +58,7 @@ pub async fn from_text(
         .into());
     }
 
-    let system = format!(
-        "{EXTRACTOR}\n\nWrite \"description\" and \"match_reason\" in {language}. \
-         Copy \"title\", \"company\" and \"location\" exactly as they appear on the page."
-    );
+    let system = system_prompt(language, extra_instructions);
     let head = format!("CV:\n{cv}\n\nPage URL: {url}\n\nPage text:\n");
 
     // Cut the page into parts that fit into the context window, and send one AI call for each.
@@ -170,6 +168,23 @@ pub async fn from_text(
         return Err(format!("{url}: {e}").into());
     }
     Ok(merge_overlap(rows))
+}
+
+/// The system prompt: the fixed rules, the output language and the user's extra instructions.
+/// The extra instructions come last, but the JSON format rules stay binding.
+fn system_prompt(language: &str, extra_instructions: &str) -> String {
+    let mut system = format!(
+        "{EXTRACTOR}\n\nWrite \"description\" and \"match_reason\" in {language}. \
+         Copy \"title\", \"company\" and \"location\" exactly as they appear on the page."
+    );
+    let extra = extra_instructions.trim();
+    if !extra.is_empty() {
+        system += &format!(
+            "\n\nExtra instructions from the user. Follow them when you select and rate the jobs, \
+             but always keep the JSON format above:\n{extra}"
+        );
+    }
+    system
 }
 
 fn to_row(job: &Value, source: &str) -> JobRow {
@@ -456,6 +471,17 @@ mod tests {
         assert_eq!(col(lines[0], "company"), col(lines[1], "Nordlicht"));
         assert_eq!(col(lines[0], "company"), col(lines[2], "Ä GmbH"));
         assert_eq!(lines[3], "  ... 1 more in the CSV file");
+    }
+
+    #[test]
+    fn extra_instructions_go_at_the_end_of_the_prompt() {
+        let plain = system_prompt("German", "  \n");
+        assert!(plain.ends_with("exactly as they appear on the page."));
+        assert!(!plain.contains("Extra instructions"));
+
+        let extra = system_prompt("English", "Rate remote jobs 10 points higher.\n");
+        assert!(extra.contains("in English."));
+        assert!(extra.ends_with("keep the JSON format above:\nRate remote jobs 10 points higher."));
     }
 
     #[test]

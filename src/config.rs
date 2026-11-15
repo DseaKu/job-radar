@@ -17,6 +17,10 @@ pub struct Config {
     /// Language for the descriptions and match reasons in the CSV (for example `German`).
     #[serde(default = "default_output_language")]
     pub output_language: String,
+    /// Extra instructions from the user for finding and rating the jobs
+    /// (for example "Rate remote jobs higher"). Empty: no extra instructions.
+    #[serde(default)]
+    pub extra_instructions: String,
 }
 
 const DEFAULT_SOURCES_PATH: &str = "sources.yaml";
@@ -195,6 +199,7 @@ impl Default for Config {
             active: "local".to_string(),
             providers: BTreeMap::from([("local".to_string(), local)]),
             output_language: default_output_language(),
+            extra_instructions: String::new(),
         }
     }
 }
@@ -233,6 +238,15 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn config_files_parse() {
+        for path in ["config.example.yaml", "demo/config.yaml"] {
+            let text = fs::read_to_string(path).expect(path);
+            let config: Config = serde_yaml::from_str(&text).expect(path);
+            config.active_provider().expect(path);
+        }
+    }
 
     #[test]
     fn sources_files_parse() {

@@ -1,4 +1,10 @@
-# Agent settings. Set AGENTS_CONFIG to use a different file.
+# Template for your settings. Copy it, then change the copy:
+#
+#   cp config.example.yaml config.yaml
+#
+# Git ignores config.yaml, so your settings stay private.
+# Without config.yaml, job_radar uses Ollama with qwen3:1.7b and English output.
+# Use another file with AGENTS_CONFIG=<path>.
 
 # The provider entry to use. To switch, change this one line.
 # The default `local` needs no API key: install Ollama, then run `ollama pull qwen3:1.7b`.
@@ -7,6 +13,16 @@ active: local
 # Language for "description" and "match_reason" in the CSV (for example English, German).
 # Job titles, company names and locations stay as they appear on the page.
 output_language: English
+
+# Extra instructions for the AI when it finds and rates the jobs. Optional.
+# Write them as normal sentences. The AI still replies in the fixed CSV format.
+# Examples:
+#   extra_instructions: |
+#     I look for a working-student job, 20 hours a week. Rate full-time jobs lower.
+#     Rate jobs with Rust or embedded systems higher.
+#     Remote or hybrid jobs are a plus.
+#     Ignore jobs in sales, marketing and management.
+extra_instructions: ""
 
 # The search pages are in sources.yaml (private, not in Git).
 # Template: sources.example.yaml.

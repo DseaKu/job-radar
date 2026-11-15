@@ -15,3 +15,6 @@ cv*
 
 # Output of --dump
 /dump/
+
+# Private settings (template: config.example.yaml)
+/config.yaml

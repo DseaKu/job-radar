@@ -43,8 +43,10 @@ No Rust and no other dependencies. The same on Linux, macOS and Windows.
 
 1. **Install Docker:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) on macOS and
    Windows, Docker Engine on Linux.
-2. **Select a model:** install Ollama, then run `ollama pull qwen3:1.7b`.
-   Or put an API key into `.env` and select the provider in `config.yaml`
+2. **Select a model:** install Ollama, then run `ollama pull qwen3:1.7b`. This is the default,
+   so no config file is necessary. For other models, an API key or
+   [extra instructions](docs/providers.md#extra-instructions), copy
+   [`config.example.yaml`](config.example.yaml) to `config.yaml` and change it
    (see [Providers](docs/providers.md)).
 3. **Prepare a folder** with your CV (`cv.txt` or a PDF) and your search pages in `sources.yaml`
    (template: [`sources.example.yaml`](sources.example.yaml)).
@@ -66,6 +68,7 @@ On Linux, add two more options: see [Docker](docs/docker.md).
    ```sh
    git clone https://github.com/DseaKu/job-radar && cd job-radar
    cp sources.example.yaml sources.yaml
+   cp config.example.yaml config.yaml      # optional, see step 2
    ```
 
 4. **Run:**

@@ -88,7 +88,15 @@ async fn main() -> Res<()> {
             {
                 eprintln!("warning: {e}");
             }
-            jobs::from_text(&backend, &args.cv, url, &text, &config.output_language).await
+            jobs::from_text(
+                &backend,
+                &args.cv,
+                url,
+                &text,
+                &config.output_language,
+                &config.extra_instructions,
+            )
+            .await
         }
         .await;
         if let (Some(d), Some(stem)) = (&dump, &stem)
