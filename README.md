@@ -29,6 +29,8 @@ merge duplicates reliably. See [Providers](docs/providers.md).
 
 ### Desktop app
 
+![The desktop app: drop the CV, find jobs, read why a job fits](demo/gui.gif)
+
 Get the installer from [Releases](https://github.com/DseaKu/job-radar/releases):
 `.dmg` (macOS), `_x64-setup.exe` / `.msi` (Windows), `.deb` / `.rpm` /
 `.AppImage` (Linux). The installers are not signed: on macOS, use _System

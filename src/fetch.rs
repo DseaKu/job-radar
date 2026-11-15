@@ -13,13 +13,36 @@ const BLOCK_TAGS: &[&str] = &[
 /// Downloads a page and returns its visible text. Links appear as `text (absolute-url)`.
 pub async fn page_text(http: &reqwest::Client, url: &str) -> Res<String> {
     let base = Url::parse(url).map_err(|e| format!("invalid URL {url}: {e}"))?;
-    let response = http.get(base.clone()).send().await?;
+    let response = http
+        .get(base.clone())
+        .send()
+        .await
+        .map_err(|e| request_error(url, &e))?;
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("GET {url} failed ({status})").into());
+        let hint = match status.as_u16() {
+            401 | 403 => "; the site blocks automatic access, so job_radar cannot read it",
+            404 => "; the page does not exist, check the URL",
+            429 => "; too many requests, try again later",
+            500..=599 => "; the site has a problem, try again later",
+            _ => "",
+        };
+        return Err(format!("GET {url} failed ({status}){hint}").into());
     }
-    let html = response.text().await?;
+    let html = response.text().await.map_err(|e| request_error(url, &e))?;
     Ok(html_to_text(&html, &base))
+}
+
+/// A readable message for a page request without an HTTP reply.
+fn request_error(url: &str, e: &reqwest::Error) -> String {
+    let cause = crate::error_causes(e);
+    if e.is_timeout() {
+        format!("GET {url}: no reply in time (timeout); the site is slow, try again later")
+    } else if e.is_connect() {
+        format!("GET {url}: cannot connect ({cause}); check your network")
+    } else {
+        format!("GET {url} failed ({cause})")
+    }
 }
 
 /// A small HTML-to-text converter. It is not a full parser, but it is enough for an LLM.
@@ -124,6 +147,21 @@ fn decode_entities(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn page_errors_show_the_cause() {
+        let http = crate::http_client().unwrap();
+        // Nothing listens on port 1.
+        let err = page_text(&http, "http://127.0.0.1:1/jobs")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.starts_with("GET http://127.0.0.1:1/jobs: cannot connect ("),
+            "{err}"
+        );
+        assert!(!err.contains("error sending request"), "{err}");
+    }
 
     #[test]
     fn extracts_text_and_links() {

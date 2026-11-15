@@ -9,6 +9,8 @@ use crate::config::{Config, ProviderKind};
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const DEFAULT_MAX_TOKENS: u32 = 4096;
+/// Upper limit for opening the connection. A reachable API needs well under a second.
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 /// Rough size of one token in characters. Set low on purpose, so that the estimate is safe
 /// for German text and long URLs.
 const CHARS_PER_TOKEN: usize = 3;
@@ -80,6 +82,8 @@ pub struct Backend {
     temperature: Option<f32>,
     /// Extra top-level fields for each request body (`extra_body` in the config).
     extra_body: BTreeMap<String, Value>,
+    /// Upper limit in seconds for one request.
+    timeout: u32,
     /// Token totals over all calls of this run.
     total_in: AtomicU64,
     total_out: AtomicU64,
@@ -128,10 +132,15 @@ impl Backend {
             }
         }
 
+        let timeout = p.timeout.unwrap_or(p.kind.default_timeout()).max(1);
         Ok(Self {
             name: name.to_string(),
             kind: p.kind,
-            http: reqwest::Client::new(),
+            http: reqwest::Client::builder()
+                .connect_timeout(CONNECT_TIMEOUT)
+                .timeout(std::time::Duration::from_secs(timeout.into()))
+                .build()?,
+            timeout,
             base_url,
             api_key,
             model: p.model.clone(),
@@ -160,7 +169,7 @@ impl Backend {
             .http
             .post(format!("{}/api/chat", self.base_url))
             .json(&self.ollama_body(system, user));
-        self.read_ollama(&send(request).await?)
+        self.read_ollama(&self.send(request).await?)
     }
 
     async fn chat_openai(&self, system: &str, user: &str) -> Res<String> {
@@ -171,7 +180,7 @@ impl Backend {
         if let Some(key) = &self.api_key {
             request = request.bearer_auth(key);
         }
-        self.read_openai(&send(request).await?)
+        self.read_openai(&self.send(request).await?)
     }
 
     async fn chat_anthropic(&self, system: &str, user: &str) -> Res<String> {
@@ -183,7 +192,7 @@ impl Backend {
         if let Some(key) = &self.api_key {
             request = request.header("x-api-key", key);
         }
-        self.read_anthropic(&send(request).await?)
+        self.read_anthropic(&self.send(request).await?)
     }
 
     fn ollama_body(&self, system: &str, user: &str) -> Value {
@@ -374,15 +383,80 @@ fn merge_extra(body: &mut Value, extra: &BTreeMap<String, Value>) {
     }
 }
 
-/// Sends the request and returns the JSON body, or an error with the API's message.
-async fn send(request: reqwest::RequestBuilder) -> Res<Value> {
-    let response = request.send().await?;
-    let status = response.status();
-    let payload: Value = response.json().await?;
-    if !status.is_success() {
-        return Err(format!("API request failed ({status}): {payload}").into());
+impl Backend {
+    /// Sends the request and returns the JSON body, or an error with the API's message, the
+    /// cause and a hint.
+    async fn send(&self, request: reqwest::RequestBuilder) -> Res<Value> {
+        let response = request.send().await.map_err(|e| self.request_error(&e))?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| self.request_error(&e))?;
+        // An error page from a proxy (for example Cloudflare) is HTML, not JSON.
+        let payload: Value = match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(_) if !status.is_success() => Value::String(preview(&text)),
+            Err(e) => {
+                return Err(format!(
+                    "{}: the API reply is not valid JSON ({e}): {}",
+                    self.name,
+                    preview(&text)
+                )
+                .into());
+            }
+        };
+        if !status.is_success() {
+            return Err(format!(
+                "API request failed ({status}): {payload}{}",
+                status_hint(status.as_u16(), &self.name)
+            )
+            .into());
+        }
+        Ok(payload)
     }
-    Ok(payload)
+
+    /// A readable message for a request without an HTTP reply: timeout, no connection and so on.
+    /// reqwest's own message ("error sending request") hides the cause, so the causes are added.
+    fn request_error(&self, e: &reqwest::Error) -> String {
+        let cause = crate::error_causes(e);
+        let name = &self.name;
+        if e.is_timeout() {
+            format!(
+                "{name}: no reply within {} seconds (timeout). The provider is slow or overloaded: \
+                 try again later. For a slow model, increase timeout in config.yaml \
+                 (app: Settings > AI provider > Advanced).",
+                self.timeout
+            )
+        } else if e.is_connect() {
+            let hint = if self.kind == ProviderKind::Ollama {
+                " Is Ollama running? Start it with: ollama serve"
+            } else {
+                " Check the base URL and your network."
+            };
+            format!(
+                "{name}: cannot connect to {} ({cause}).{hint}",
+                self.base_url
+            )
+        } else {
+            format!("{name}: the request failed ({cause}).")
+        }
+    }
+}
+
+/// A hint for an HTTP error status, or "".
+fn status_hint(status: u16, name: &str) -> String {
+    let hint = match status {
+        401 | 403 => "the API key is wrong or has no access; check it in .env",
+        404 => "the base URL or the model name is wrong",
+        408 | 504 => "the provider did not answer in time; try again later",
+        429 => "too many requests or no credit left; wait a moment or check your account",
+        500..=599 => "the provider has a problem; try again later or use another provider",
+        _ => return String::new(),
+    };
+    format!(" (hint for {name}: {hint})")
+}
+
+fn preview(text: &str) -> String {
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    flat.chars().take(300).collect()
 }
 
 #[cfg(test)]
@@ -403,6 +477,79 @@ mod tests {
 
     fn cut_off(result: Res<String>) -> ReplyCutOff {
         *result.unwrap_err().downcast::<ReplyCutOff>().unwrap()
+    }
+
+    /// A one-shot local HTTP server: it answers the first request with `reply` after `delay`.
+    async fn server(reply: &'static str, delay: u64) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 4096];
+            let _ = socket.read(&mut buf).await;
+            tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+            let _ = socket.write_all(reply.as_bytes()).await;
+        });
+        format!("http://{addr}")
+    }
+
+    fn backend_at(url: &str, extra: &str) -> Backend {
+        backend("openai", &format!("    base_url: {url}\n{extra}"))
+    }
+
+    #[tokio::test]
+    async fn timeout_and_connect_errors_are_clear() {
+        let url = server("", 5).await;
+        let err = backend_at(&url, "    timeout: 1\n")
+            .chat("s", "u")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.starts_with("p: no reply within 1 seconds (timeout)"),
+            "{err}"
+        );
+
+        // Nothing listens on port 1.
+        let err = backend_at("http://127.0.0.1:1", "")
+            .chat("s", "u")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.starts_with("p: cannot connect to http://127.0.0.1:1 ("),
+            "{err}"
+        );
+        assert!(
+            err.ends_with("Check the base URL and your network."),
+            "{err}"
+        );
+        assert!(!err.contains("error sending request for url"), "{err}");
+
+        assert_eq!(backend("ollama", "").timeout, 600);
+        assert_eq!(backend("anthropic", "").timeout, 300);
+    }
+
+    #[tokio::test]
+    async fn http_errors_have_a_hint_also_with_an_html_body() {
+        let url = server(
+            "HTTP/1.1 503 Service Unavailable\r\ncontent-type: text/html\r\ncontent-length: 27\r\n\r\n<html>\n  overloaded\n</html>",
+            0,
+        )
+        .await;
+        let err = backend_at(&url, "")
+            .chat("s", "u")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            err,
+            "API request failed (503 Service Unavailable): \"<html> overloaded </html>\" \
+             (hint for p: the provider has a problem; try again later or use another provider)"
+        );
+        assert!(status_hint(401, "p").contains(".env"));
+        assert_eq!(status_hint(400, "p"), "");
     }
 
     #[test]

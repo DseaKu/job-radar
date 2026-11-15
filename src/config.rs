@@ -196,6 +196,10 @@ pub struct ProviderConfig {
     /// Do not put API keys here: they stay in `.env`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra_body: Option<BTreeMap<String, serde_json::Value>>,
+    /// Upper limit in seconds for one AI request, from the start to the end of the reply.
+    /// Without it: 600 for ollama (a local model can be slow), 300 for the others.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -228,6 +232,14 @@ impl ProviderKind {
         }
     }
 
+    /// The request timeout in seconds if the config does not set one.
+    pub fn default_timeout(self) -> u32 {
+        match self {
+            Self::Ollama => 600,
+            Self::OpenAi | Self::Anthropic => 300,
+        }
+    }
+
     pub fn default_api_key_env(self) -> Option<&'static str> {
         match self {
             Self::Ollama => None,
@@ -249,6 +261,7 @@ impl Default for Config {
             context_length: None,
             temperature: None,
             extra_body: None,
+            timeout: None,
         };
         Self {
             active: "local".to_string(),

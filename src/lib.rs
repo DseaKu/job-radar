@@ -65,6 +65,25 @@ pub mod ignore;
 pub mod jobs;
 pub mod run;
 
+/// The causes of a request error, for example "tcp connect error: Connection refused".
+/// reqwest's own message ("error sending request for url ...") hides them.
+pub(crate) fn error_causes(e: &reqwest::Error) -> String {
+    let mut causes: Vec<String> = Vec::new();
+    let mut source = std::error::Error::source(e);
+    while let Some(s) = source {
+        let text = s.to_string();
+        if !causes.contains(&text) {
+            causes.push(text);
+        }
+        source = s.source();
+    }
+    if causes.is_empty() {
+        e.to_string()
+    } else {
+        causes.join(": ")
+    }
+}
+
 /// The HTTP client for reading the job pages and for the AI APIs.
 pub fn http_client() -> Res<reqwest::Client> {
     Ok(reqwest::Client::builder()
