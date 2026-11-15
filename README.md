@@ -6,9 +6,7 @@ Give it your CV and one or more career-page URLs. An LLM finds the job postings,
 rates each job against your CV (0 to 100, with a short reason), and writes a CSV
 (best match first).
 
-![job_radar demo: a CV and two career pages in, a ranked job list out](demo/demo.gif)
-
-![Example result: jobs.csv as a table with score, title, company, location and the reason for each score](docs/images/example-result.svg)
+![The desktop app: drop the CV, find jobs, read why a job fits](demo/gui.gif)
 
 ```mermaid
 flowchart LR
@@ -28,8 +26,6 @@ about $0.02 per run. The free default `qwen3:1.7b` misses more jobs and does not
 merge duplicates reliably. See [Providers](docs/providers.md).
 
 ### Desktop app
-
-![The desktop app: drop the CV, find jobs, read why a job fits](demo/gui.gif)
 
 Get the installer from [Releases](https://github.com/DseaKu/job-radar/releases):
 `.dmg` (macOS), `_x64-setup.exe` / `.msi` (Windows), `.deb` / `.rpm` /
