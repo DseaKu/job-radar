@@ -34,8 +34,40 @@ flowchart LR
 
 ## Quick start
 
-Two ways to run it. Both need a model: [Ollama](https://ollama.com/) on your computer
+Three ways to run it. All need a model: [Ollama](https://ollama.com/) on your computer
 (free, no account) or an API key for Anthropic or OpenAI.
+
+### Desktop app
+
+A window with a CV upload, a results table and forms for all settings. No terminal, no files to edit.
+
+1. **Install:** get the installer for your system from the
+   [Releases](https://github.com/DseaKu/job-radar/releases) page.
+
+   | System | File |
+   |---|---|
+   | macOS (Apple Silicon and Intel) | `.dmg`: open it, then drag Job Radar into Applications |
+   | Windows | `_x64-setup.exe` or `.msi` |
+   | Linux | `.deb` (Debian, Ubuntu), `.rpm` (Fedora), `.AppImage` (other, x64 only) |
+
+   The installers have no paid signature, so the first start shows a warning. On macOS, open
+   *System Settings → Privacy & Security* and click *Open Anyway*. On Windows, click
+   *More info → Run anyway*.
+2. **Open Settings:** select the AI provider, paste the API key (cloud models only) and add your
+   search pages. *Save* writes them in the app data folder (the link at the bottom left of Settings).
+3. **Drop your CV** into the window and click *Find jobs*. *Export CSV* saves the result.
+
+To build the installer yourself, you need Rust, Node.js and (on Linux) the
+[Tauri system packages](https://v2.tauri.app/start/prerequisites/#linux):
+
+```sh
+cd gui
+npm install
+npm run tauri build      # installer in gui/src-tauri/target/release/bundle/
+```
+
+`npm run tauri dev` starts the app without an install. It uses the settings files in the project folder,
+the same files as the command line.
 
 ### With Docker (recommended)
 
@@ -56,7 +88,7 @@ No Rust and no other dependencies. The same on Linux, macOS and Windows.
    docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt
    ```
 
-**Done:** `jobs.csv` is in your folder. Add `-v` at the end to see the progress and the best jobs.
+**Done:** `jobs.csv` is in your folder. Add `-v -p` at the end to see the progress and the best jobs.
 On Linux, add two more options: see [Docker](docs/docker.md).
 
 ### With Rust

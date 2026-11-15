@@ -1,40 +1,11 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-
-/// Set by `-v` / `--verbose`. Without it, only warnings, errors and the result line are shown.
-static VERBOSE: AtomicBool = AtomicBool::new(false);
-
-pub fn verbose() -> bool {
-    VERBOSE.load(Ordering::Relaxed)
-}
-
-/// Progress message: printed to stderr only with `-v` / `--verbose`.
-macro_rules! info {
-    ($($arg:tt)*) => {
-        if $crate::verbose() {
-            eprintln!($($arg)*);
-        }
-    };
-}
-
-mod backend;
-mod config;
-mod cv;
-mod dedup;
-mod dump;
-mod fetch;
-mod ignore;
 mod input;
-mod jobs;
 
-use std::time::Duration;
-
-use backend::{Backend, Usage};
-use config::Config;
+use job_radar::backend::{Backend, Usage};
+use job_radar::config::{self, Config};
+use job_radar::{Level, Res, cv, fetch, ignore, jobs, run};
 
 /// How many of the best jobs the `--print-results` table shows.
 const TABLE_ROWS: usize = 10;
-
-pub type Res<T> = Result<T, Box<dyn std::error::Error>>;
 
 #[tokio::main]
 async fn main() -> Res<()> {
@@ -47,10 +18,7 @@ async fn main() -> Res<()> {
         return cv::convert_command(&argv[1..]);
     }
 
-    let http = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (compatible; job_radar/0.1)")
-        .timeout(Duration::from_secs(30))
-        .build()?;
+    let http = job_radar::http_client()?;
 
     // Offline subcommand: shows the page text that the AI would get.
     if argv.first().map(String::as_str) == Some("page-text") {
@@ -62,128 +30,36 @@ async fn main() -> Res<()> {
     }
 
     let args = input::parse_args()?;
-    VERBOSE.store(args.verbose, Ordering::Relaxed);
+    // Without -v, only warnings and errors are shown.
+    let verbose = args.verbose;
+    job_radar::set_logger(move |level, msg| {
+        if verbose || level == Level::Warn {
+            eprintln!("{msg}");
+        }
+    });
     let config = Config::load()?;
     let ignore_rules = ignore::load()?;
 
     // URLs on the command line win; otherwise use the enabled sources from the config.
-    let targets = select_targets(&args.urls, config::load_sources)?;
-
+    let targets = run::targets(&args.urls, config::load_sources)?;
+    let opts = run::Options {
+        cv: &args.cv,
+        targets: &targets,
+        kill_dups: args.kill_dups,
+        dump: args.dump.as_deref(),
+    };
     let backend = Backend::from_config(&config)?;
-    info!("Using backend: {}", backend.describe());
+    let mut outcome = run::run(&backend, &config, &ignore_rules, &opts, &http, |_| {}).await?;
 
-    let mut rows = Vec::new();
-    let mut failed = 0;
-    // Token usage of each step, for the table at the end.
-    let mut usage: Vec<(String, Usage)> = Vec::new();
-    let mut dump = args.dump.as_deref().map(dump::Dump::new).transpose()?;
-    for (name, url) in &targets {
-        info!("Reading {name} ...");
-        let before = backend.usage();
-        let stem = dump.as_mut().map(|d| d.stem(name));
-        let result = async {
-            let text = fetch::page_text(&http, url).await?;
-            if let (Some(d), Some(stem)) = (&dump, &stem)
-                && let Err(e) = d.write_page(stem, &text)
-            {
-                eprintln!("warning: {e}");
-            }
-            jobs::from_text(
-                &backend,
-                &args.cv,
-                url,
-                &text,
-                &config.output_language,
-                &config.extra_instructions,
-            )
-            .await
-        }
-        .await;
-        if let (Some(d), Some(stem)) = (&dump, &stem)
-            && let Err(e) = d.write_jobs(stem, name, url, &result, &ignore_rules)
-        {
-            eprintln!("warning: {e}");
-        }
-        match result {
-            Ok(found) => {
-                info!("  {} jobs found", found.len());
-                rows.extend(found);
-            }
-            Err(e) => {
-                if verbose() {
-                    eprintln!("  error: {e}");
-                } else {
-                    eprintln!("error: {name}: {e}");
-                }
-                failed += 1;
-            }
-        }
-        usage.push((name.clone(), backend.usage() - before));
+    jobs::write_csv(&args.out, &mut outcome.rows)?;
+    eprintln!("Wrote {} jobs to {}", outcome.rows.len(), args.out);
+    if verbose {
+        eprint!("\n{}", usage_table(&outcome.usage));
     }
-
-    // Remove ignored jobs before the dedup step, so that it gets fewer rows.
-    if !ignore_rules.is_empty() {
-        let removed = ignore::apply(&mut rows, &ignore_rules);
-        info!(
-            "{removed} jobs ignored (ignore list: {} entries)",
-            ignore_rules.len()
-        );
-    }
-
-    if args.kill_dups && rows.len() > 1 {
-        info!("Removing duplicates ...");
-        let before = rows.len();
-        let usage_before = backend.usage();
-        let result = dedup::find_dups(&backend, &rows).await;
-        usage.push((
-            "duplicate check".to_string(),
-            backend.usage() - usage_before,
-        ));
-        match result {
-            Ok(groups) => {
-                rows = dedup::merge(rows, groups);
-                info!("  {} duplicates removed", before - rows.len());
-            }
-            Err(e) => eprintln!("  warning: duplicates not removed: {e}"),
-        }
-    }
-
-    jobs::write_csv(&args.out, &mut rows)?;
-    eprintln!("Wrote {} jobs to {}", rows.len(), args.out);
-    if verbose() {
-        eprint!("\n{}", usage_table(&usage));
-    }
-    if args.print_results && !rows.is_empty() {
-        print!("\n{}", jobs::table(&rows, TABLE_ROWS));
-    }
-
-    if failed == targets.len() {
-        return Err("all URLs failed".into());
+    if args.print_results && !outcome.rows.is_empty() {
+        print!("\n{}", jobs::table(&outcome.rows, TABLE_ROWS));
     }
     Ok(())
-}
-
-/// The pages to read, as (name for the log, URL). URLs on the command line win; otherwise the
-/// enabled entries from sources.yaml are used. `load_sources` is called only without URLs.
-fn select_targets(
-    urls: &[String],
-    load_sources: impl FnOnce() -> Res<Vec<config::Source>>,
-) -> Res<Vec<(String, String)>> {
-    let targets: Vec<(String, String)> = if urls.is_empty() {
-        load_sources()?
-            .into_iter()
-            .filter(|s| s.enabled)
-            .map(|s| (s.name, s.url))
-            .collect()
-    } else {
-        urls.iter().map(|u| (u.clone(), u.clone())).collect()
-    };
-    if targets.is_empty() {
-        return Err("no URLs given and no enabled sources in sources.yaml \
-                    (create it with: cp sources.example.yaml sources.yaml)"
-            .into());
-    }
-    Ok(targets)
 }
 
 /// A table of the token usage of each step, with a total row if there is more than one step.
@@ -221,15 +97,6 @@ fn usage_table(steps: &[(String, Usage)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use config::Source;
-
-    fn source(name: &str, enabled: bool) -> Source {
-        Source {
-            name: name.into(),
-            url: format!("https://{name}.de"),
-            enabled,
-        }
-    }
 
     #[test]
     fn usage_table_has_one_row_per_step_and_a_total() {
@@ -250,29 +117,5 @@ mod tests {
         assert_eq!(lines[4], "total                18301       5647      4");
         // One step: no total row.
         assert_eq!(usage_table(&[("A".into(), u(1, 2, 1))]).lines().count(), 2);
-    }
-
-    #[test]
-    fn command_line_urls_win_and_sources_are_not_loaded() {
-        let urls = vec!["https://x.de/jobs".to_string()];
-        let targets = select_targets(&urls, || panic!("sources must not be loaded")).unwrap();
-        assert_eq!(targets, [(urls[0].clone(), urls[0].clone())]);
-    }
-
-    #[test]
-    fn only_enabled_sources_are_read() {
-        let targets =
-            select_targets(&[], || Ok(vec![source("a", true), source("b", false)])).unwrap();
-        assert_eq!(targets, [("a".to_string(), "https://a.de".to_string())]);
-    }
-
-    #[test]
-    fn nothing_to_read_is_an_error() {
-        let err = select_targets(&[], || Ok(vec![source("b", false)])).unwrap_err();
-        assert!(
-            err.to_string()
-                .starts_with("no URLs given and no enabled sources")
-        );
-        assert!(select_targets(&[], || Err("invalid sources.yaml".into())).is_err());
     }
 }

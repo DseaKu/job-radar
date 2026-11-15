@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::Res;
@@ -30,7 +30,7 @@ Each element is an object with these keys:
 If the page contains no job postings, reply with []."#;
 
 /// One CSV row.
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobRow {
     pub match_score: Option<i64>,
     pub title: String,
@@ -72,7 +72,7 @@ pub async fn from_text(
     }
     let mut chunks = split_chunks(text, budget, budget / 10);
     if chunks.len() > MAX_CHUNKS {
-        eprintln!(
+        warn!(
             "  warning: the page needs {} slices, only the first {MAX_CHUNKS} are read; \
              increase context_length in config.yaml to read more",
             chunks.len()
@@ -126,16 +126,16 @@ pub async fn from_text(
                         continue;
                     }
                     if saved.is_empty() {
-                        eprintln!(
+                        warn!(
                             "    warning: slice {label}: the reply has no complete job before the cut \
                              at max_tokens ({}). The model probably thinks or repeats itself.\n    \
                              reply starts with: {}",
                             cut.max_tokens,
                             preview(&cut.partial).replace('\n', " ")
                         );
-                        last_error = Some(cut as Box<dyn std::error::Error>);
+                        last_error = Some(cut as Box<dyn std::error::Error + Send + Sync>);
                     } else {
-                        eprintln!(
+                        warn!(
                             "    warning: slice {label}: {cut}; kept {} complete jobs from the reply",
                             saved.len()
                         );
@@ -145,7 +145,7 @@ pub async fn from_text(
                 }
                 Err(e) => {
                     if sliced {
-                        eprintln!("    warning: slice {label} failed: {e}");
+                        warn!("    warning: slice {label} failed: {e}");
                     }
                     last_error = Some(e);
                     continue;
@@ -156,7 +156,7 @@ pub async fn from_text(
             Ok(items) => rows.extend(items.iter().map(|job| to_row(job, url))),
             Err(e) => {
                 if sliced {
-                    eprintln!("    warning: slice {label} failed: {e}");
+                    warn!("    warning: slice {label} failed: {e}");
                 }
                 last_error = Some(e);
             }
@@ -279,9 +279,14 @@ fn merge_overlap(rows: Vec<JobRow>) -> Vec<JobRow> {
     out
 }
 
+/// Sorts the rows: best match first, rows without a score last.
+pub fn sort(rows: &mut [JobRow]) {
+    rows.sort_by_key(|r| std::cmp::Reverse(r.match_score.unwrap_or(-1)));
+}
+
 /// Sorts the rows (best match first) and writes them to a CSV file.
 pub fn write_csv(path: &str, rows: &mut [JobRow]) -> Res<()> {
-    rows.sort_by_key(|r| std::cmp::Reverse(r.match_score.unwrap_or(-1)));
+    sort(rows);
     let mut writer =
         csv::Writer::from_path(path).map_err(|e| format!("cannot write {path}: {e}"))?;
     for row in rows.iter() {
@@ -289,6 +294,16 @@ pub fn write_csv(path: &str, rows: &mut [JobRow]) -> Res<()> {
     }
     writer.flush()?;
     Ok(())
+}
+
+/// Reads a CSV file from [`write_csv`].
+pub fn read_csv(path: &str) -> Res<Vec<JobRow>> {
+    let mut reader =
+        csv::Reader::from_path(path).map_err(|e| format!("cannot read {path}: {e}"))?;
+    reader
+        .deserialize()
+        .collect::<Result<Vec<JobRow>, _>>()
+        .map_err(|e| format!("{path} is not a job_radar CSV file: {e}").into())
 }
 
 /// A short text table of the first `max` rows: score, title, company and location.
@@ -471,6 +486,37 @@ mod tests {
         assert_eq!(col(lines[0], "company"), col(lines[1], "Nordlicht"));
         assert_eq!(col(lines[0], "company"), col(lines[2], "Ä GmbH"));
         assert_eq!(lines[3], "  ... 1 more in the CSV file");
+    }
+
+    #[test]
+    fn csv_file_reads_back() {
+        let row = |score: Option<i64>, title: &str| JobRow {
+            match_score: score,
+            title: title.into(),
+            company: "Nordlicht, \"Robotics\"".into(),
+            location: "Bochum".into(),
+            description: "Line 1\nLine 2".into(),
+            match_reason: String::new(),
+            url: "https://a.de/1".into(),
+            source: "https://a.de".into(),
+        };
+        let path = std::env::temp_dir().join("job_radar_test_read_csv.csv");
+        let path = path.to_str().unwrap();
+        write_csv(path, &mut [row(None, "No score"), row(Some(80), "Dev")]).unwrap();
+        let rows = read_csv(path).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].match_score, Some(80));
+        assert_eq!(rows[0].company, "Nordlicht, \"Robotics\"");
+        assert_eq!(rows[0].description, "Line 1\nLine 2");
+        assert_eq!(rows[1].match_score, None);
+
+        std::fs::write(path, "a,b\n1,2\n").unwrap();
+        assert!(
+            read_csv(path)
+                .unwrap_err()
+                .to_string()
+                .contains("not a job_radar CSV")
+        );
     }
 
     #[test]

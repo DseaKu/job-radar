@@ -1,6 +1,6 @@
 use std::{env, fs, path::Path};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::Res;
 use crate::jobs::JobRow;
@@ -9,7 +9,7 @@ const DEFAULT_IGNORE_PATH: &str = "ignore.yaml";
 
 /// The ignore list, loaded from `ignore.yaml` (or the file named by `JOB_RADAR_IGNORE`).
 /// Jobs that match an entry are not written to the CSV, for example jobs you already applied to.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct IgnoreFile {
     #[serde(default)]
@@ -21,15 +21,18 @@ struct IgnoreFile {
 /// - `company`, `title`: the text is in the job's company or title (case does not count).
 ///   It must start at the start of a word: `its` matches "ITS GmbH", but not "Digits GmbH";
 ///   `polizei` matches "Polizeipräsidium".
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Rule {
-    url: Option<String>,
-    company: Option<String>,
-    title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub company: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// Free text for you (for example "applied 2026-11-01"). The tool does not use it.
-    #[allow(dead_code)]
-    note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 impl Rule {
@@ -45,7 +48,8 @@ impl Rule {
             && self.title.as_ref().is_none_or(|t| contains(&row.title, t))
     }
 
-    fn is_empty(&self) -> bool {
+    /// True if the rule has no url, company or title, so that it can never match.
+    pub fn is_empty(&self) -> bool {
         [&self.url, &self.company, &self.title]
             .iter()
             .all(|f| f.as_deref().is_none_or(|s| s.trim().is_empty()))
@@ -73,12 +77,35 @@ fn norm_url(url: &str) -> String {
     url.trim_end_matches('/').to_lowercase()
 }
 
-/// Loads the ignore list. A missing default file gives an empty list.
-pub fn load() -> Res<Vec<Rule>> {
-    let (path, explicit) = match env::var("JOB_RADAR_IGNORE") {
+fn path_and_explicit() -> (String, bool) {
+    match env::var("JOB_RADAR_IGNORE") {
         Ok(p) if !p.trim().is_empty() => (p, true),
         _ => (DEFAULT_IGNORE_PATH.to_string(), false),
+    }
+}
+
+/// The path of the ignore list.
+pub fn path() -> String {
+    path_and_explicit().0
+}
+
+/// Writes the ignore list. Entries without url, company and title are left out.
+/// The comments of the old file are lost.
+pub fn save(rules: &[Rule]) -> Res<()> {
+    let file = IgnoreFile {
+        ignore: rules.iter().filter(|r| !r.is_empty()).cloned().collect(),
     };
+    crate::config::write_yaml(
+        &path(),
+        "# Jobs to leave out of the results. Written by the Job Radar app; comments are not kept.\n\
+         # All fields are explained in ignore.example.yaml.\n",
+        &file,
+    )
+}
+
+/// Loads the ignore list. A missing default file gives an empty list.
+pub fn load() -> Res<Vec<Rule>> {
+    let (path, explicit) = path_and_explicit();
     if !explicit && !Path::new(&path).exists() {
         return Ok(Vec::new());
     }
@@ -183,6 +210,26 @@ mod tests {
         assert_eq!(apply(&mut rows, &rules), 4);
         let left: Vec<_> = rows.iter().map(|r| r.company.as_str()).collect();
         assert_eq!(left, ["Schwarz Digits", "Other"]);
+    }
+
+    #[test]
+    fn saved_rules_parse_again() {
+        let rules = vec![
+            Rule {
+                company: Some("AHE".into()),
+                note: Some("applied".into()),
+                ..Rule::default()
+            },
+            Rule {
+                url: Some("https://a.de/job/1".into()),
+                ..Rule::default()
+            },
+        ];
+        let text = serde_yaml::to_string(&IgnoreFile {
+            ignore: rules.clone(),
+        })
+        .unwrap();
+        assert_eq!(parse(&text).unwrap(), rules);
     }
 
     #[test]

@@ -14,7 +14,7 @@ const CHARS_PER_TOKEN: usize = 3;
 
 /// Token counts. `Backend::usage()` gives the totals of this run; the difference of two
 /// snapshots gives the usage of one step (for example one website).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Usage {
     pub input: u64,
     pub output: u64,
@@ -85,15 +85,26 @@ pub struct Backend {
 
 impl Backend {
     /// Builds the backend for the active provider in the config.
+    /// The API key comes from the environment variable that the provider names.
     pub fn from_config(config: &Config) -> Res<Self> {
+        Self::from_config_with_keys(config, |var| env::var(var).ok())
+    }
+
+    /// Like [`Backend::from_config`], but `api_key` gives the value of the API key variable
+    /// (for example from a `.env` file that was changed after the start).
+    pub fn from_config_with_keys(
+        config: &Config,
+        api_key: impl Fn(&str) -> Option<String>,
+    ) -> Res<Self> {
         let (name, p) = config.active_provider()?;
 
-        let api_key = match p.api_key_env.as_deref().or(p.kind.default_api_key_env()) {
-            Some(var) => Some(env::var(var).map_err(|_| {
-                format!("provider '{name}' requires the {var} environment variable")
-            })?),
-            None => None,
-        };
+        let api_key =
+            match Config::api_key_var(p) {
+                Some(var) => Some(api_key(var).filter(|k| !k.trim().is_empty()).ok_or_else(
+                    || format!("provider '{name}' requires the {var} environment variable"),
+                )?),
+                None => None,
+            };
 
         // For Ollama without a base_url in the config, JOB_RADAR_OLLAMA_URL can set the address.
         // The Docker image uses it: inside a container, "localhost" is the container itself.
@@ -198,7 +209,7 @@ impl Backend {
         // Ollama cuts a prompt that is too long without an error. Detect it from the token count.
         let prompt_tokens = payload["prompt_eval_count"].as_u64().unwrap_or(0);
         if prompt_tokens + u64::from(self.max_tokens) >= u64::from(self.context_length) {
-            eprintln!(
+            warn!(
                 "  warning: the prompt used {prompt_tokens} of {} context tokens and was possibly cut; \
                  increase context_length in config.yaml",
                 self.context_length
@@ -295,7 +306,7 @@ impl Backend {
         Ok(text)
     }
 
-    fn cut_off(&self, partial: &str) -> Box<dyn std::error::Error> {
+    fn cut_off(&self, partial: &str) -> Box<dyn std::error::Error + Send + Sync> {
         Box::new(ReplyCutOff {
             max_tokens: self.max_tokens,
             partial: strip_think(partial),
