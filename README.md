@@ -85,6 +85,21 @@ cargo run --release -- --cv cv.txt
 CSV columns:
 `match_score, title, company, location, description, match_reason, url, source`.
 
+### Extra request fields
+
+Some APIs need extra fields in the request body. Add them with `extra_body` in
+`config.yaml` (app: _Settings → AI provider → Advanced_). Example for Leiolai:
+
+```yaml
+providers:
+  leiolai:
+    type: openai
+    model: leiolai-1
+    base_url: https://api.leiolai.com/v1
+    api_key_env: LEIOLAI_API_KEY   # the key itself stays in .env
+    extra_body: {"mode": "non-private"}
+```
+
 ## Limitations
 
 - Pages that build their job list with JavaScript return no jobs (for example

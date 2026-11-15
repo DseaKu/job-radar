@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::env;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -77,6 +78,8 @@ pub struct Backend {
     effort: Option<String>,
     context_length: u32,
     temperature: Option<f32>,
+    /// Extra top-level fields for each request body (`extra_body` in the config).
+    extra_body: BTreeMap<String, Value>,
     /// Token totals over all calls of this run.
     total_in: AtomicU64,
     total_out: AtomicU64,
@@ -136,6 +139,7 @@ impl Backend {
             effort: p.effort.clone(),
             context_length: p.context_length.unwrap_or(p.kind.default_context_length()),
             temperature: p.temperature,
+            extra_body: p.extra_body.clone().unwrap_or_default(),
             total_in: AtomicU64::new(0),
             total_out: AtomicU64::new(0),
             calls: AtomicU64::new(0),
@@ -200,6 +204,7 @@ impl Backend {
         if let Some(t) = self.temperature {
             body["options"]["temperature"] = json!(t);
         }
+        merge_extra(&mut body, &self.extra_body);
         body
     }
 
@@ -239,6 +244,7 @@ impl Backend {
         if let Some(t) = self.temperature {
             body["temperature"] = json!(t);
         }
+        merge_extra(&mut body, &self.extra_body);
         body
     }
 
@@ -270,6 +276,7 @@ impl Backend {
         if let Some(t) = self.temperature {
             body["temperature"] = json!(t);
         }
+        merge_extra(&mut body, &self.extra_body);
         body
     }
 
@@ -357,6 +364,16 @@ fn strip_think(text: &str) -> String {
     }
 }
 
+/// Copies each extra field into the top level of the request body. A field that the body
+/// already has is replaced (the same as `extra_body` in the OpenAI SDK).
+fn merge_extra(body: &mut Value, extra: &BTreeMap<String, Value>) {
+    if let Some(map) = body.as_object_mut() {
+        for (key, value) in extra {
+            map.insert(key.clone(), value.clone());
+        }
+    }
+}
+
 /// Sends the request and returns the JSON body, or an error with the API's message.
 async fn send(request: reqwest::RequestBuilder) -> Res<Value> {
     let response = request.send().await?;
@@ -386,6 +403,44 @@ mod tests {
 
     fn cut_off(result: Res<String>) -> ReplyCutOff {
         *result.unwrap_err().downcast::<ReplyCutOff>().unwrap()
+    }
+
+    #[test]
+    fn extra_body_is_merged_into_each_request() {
+        let extra = "    temperature: 0.5\n    extra_body: {\"mode\": \"non-private\", \"temperature\": 0}\n";
+        for kind in ["openai", "anthropic", "ollama"] {
+            let b = backend(kind, extra);
+            let body = match kind {
+                "openai" => b.openai_body("sys", "usr"),
+                "anthropic" => b.anthropic_body("sys", "usr"),
+                _ => b.ollama_body("sys", "usr"),
+            };
+            assert_eq!(body["mode"], "non-private", "{kind}");
+            assert_eq!(body["model"], "m", "{kind}");
+        }
+        // An existing top-level field is replaced.
+        assert_eq!(
+            backend("openai", extra).openai_body("s", "u")["temperature"],
+            0
+        );
+
+        // Without extra_body, the body is the same as before.
+        let plain = backend("openai", "    temperature: 0.5\n").openai_body("s", "u");
+        let mut merged = plain.clone();
+        merge_extra(&mut merged, &BTreeMap::new());
+        assert_eq!(merged, plain);
+        assert_eq!(
+            plain,
+            json!({
+                "model": "m",
+                "max_tokens": 100,
+                "messages": [
+                    { "role": "system", "content": "s" },
+                    { "role": "user", "content": "u" },
+                ],
+                "temperature": 0.5,
+            })
+        );
     }
 
     #[test]

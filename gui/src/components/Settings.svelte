@@ -4,7 +4,7 @@
   import { ask } from "@tauri-apps/plugin-dialog";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import * as api from "../lib/api";
-  import type { Config, ProviderConfig, Rule, Settings, Source, VarValue } from "../lib/types";
+  import { parseExtraBody, type Config, type ProviderConfig, type Rule, type Settings, type Source, type VarValue } from "../lib/types";
   import ProviderTab from "./settings/ProviderTab.svelte";
   import SourcesTab from "./settings/SourcesTab.svelte";
   import SearchTab from "./settings/SearchTab.svelte";
@@ -48,20 +48,24 @@
   let apiKeys = $state<Record<string, string>>({});
   let envKeys = $state<string[]>([]);
   let dups = $state(killDups);
+  /** The "extra request body" text of each provider, as typed (it can be invalid JSON). */
+  let extraTexts = $state<Record<string, string>>({});
   let initial = "";
 
   function draftText() {
-    return JSON.stringify([config, vars, sources, rules, apiKeys, dups]);
+    return JSON.stringify([config, vars, sources, rules, apiKeys, dups, extraTexts]);
   }
 
   onMount(async () => {
     try {
       const [s, info] = await Promise.all([api.loadSettings(), api.appInfo()]);
       // All optional fields exist, so that the form does not change the draft by itself.
-      for (const pc of Object.values(s.config.providers)) {
+      for (const [name, pc] of Object.entries(s.config.providers)) {
         for (const key of ["base_url", "api_key_env", "max_tokens", "effort", "context_length", "temperature"] as const) {
           pc[key] ??= null;
         }
+        pc.extra_body ??= null;
+        extraTexts[name] = pc.extra_body ? JSON.stringify(pc.extra_body, null, 2) : "";
       }
       for (const r of s.ignore) {
         r.company ??= null;
@@ -100,6 +104,7 @@
       effort: text(p.effort),
       context_length: num(p.context_length),
       temperature: num(p.temperature),
+      extra_body: p.extra_body ?? null,
     };
   }
 
@@ -120,7 +125,15 @@
     saveError = null;
     const snap = $state.snapshot(config);
     const providers: Record<string, ProviderConfig> = {};
-    for (const [name, p] of Object.entries(snap.providers)) providers[name] = cleanProvider(p);
+    for (const [name, p] of Object.entries(snap.providers)) {
+      const extra = parseExtraBody(extraTexts[name] ?? "");
+      if ("error" in extra) {
+        saveError = `Provider "${name}", extra request body: ${extra.error}`;
+        saving = false;
+        return;
+      }
+      providers[name] = { ...cleanProvider(p), extra_body: extra.value };
+    }
     const settings: Settings = {
       config: { ...snap, providers },
       vars: varsRecord(),
@@ -183,7 +196,7 @@
         <div class="notice error">The settings cannot be read: {loadError}</div>
       {:else if loaded}
         {#if tab === "provider"}
-          <ProviderTab bind:config bind:apiKeys {envKeys} />
+          <ProviderTab bind:config bind:apiKeys bind:extraTexts {envKeys} />
         {:else if tab === "sources"}
           <SourcesTab bind:sources bind:vars varsRecord={varsRecord} />
         {:else if tab === "search"}

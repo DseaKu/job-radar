@@ -8,6 +8,7 @@
     DEFAULT_MODEL,
     KIND_LABEL,
     apiKeyVar,
+    parseExtraBody,
     type Config,
     type ProviderKind,
   } from "../../lib/types";
@@ -16,8 +17,10 @@
     config: Config;
     apiKeys: Record<string, string>;
     envKeys: string[];
+    /** The "extra request body" text of each provider, as typed. */
+    extraTexts: Record<string, string>;
   }
-  let { config = $bindable(), apiKeys = $bindable(), envKeys }: Props = $props();
+  let { config = $bindable(), apiKeys = $bindable(), extraTexts = $bindable(), envKeys }: Props = $props();
 
   const kinds: ProviderKind[] = ["ollama", "anthropic", "openai"];
   const efforts: Record<ProviderKind, string[]> = {
@@ -28,6 +31,8 @@
 
   let names = $derived(Object.keys(config.providers).sort());
   let p = $derived(config.providers[config.active]);
+  let extraText = $derived(extraTexts[config.active] ?? "");
+  let extraParsed = $derived(parseExtraBody(extraText));
   let keyVar = $derived(p ? apiKeyVar(p) : null);
 
   let showKey = $state(false);
@@ -70,10 +75,17 @@
   }
 
   async function testConnection() {
-    testing = true;
     test = null;
+    // The test uses the extra fields as typed, also before Save.
+    if ("error" in extraParsed) {
+      test = { ok: false, text: `Extra request body: ${extraParsed.error}` };
+      return;
+    }
+    const draft = $state.snapshot(config) as Config;
+    draft.providers[draft.active].extra_body = extraParsed.value;
+    testing = true;
     try {
-      const text = await api.testConnection($state.snapshot(config), $state.snapshot(apiKeys));
+      const text = await api.testConnection(draft, $state.snapshot(apiKeys));
       test = { ok: true, text };
     } catch (e) {
       test = { ok: false, text: api.errorText(e) };
@@ -222,6 +234,23 @@
             </label>
           {/if}
         </div>
+        <label class="field">
+          <span>Extra request body (JSON)</span>
+          <textarea
+            rows="3"
+            spellcheck="false"
+            class="mono"
+            class:invalid={"error" in extraParsed}
+            value={extraText}
+            oninput={(e) => (extraTexts[config.active] = e.currentTarget.value)}
+            placeholder={'For example: {"mode": "non-private"}'}
+          ></textarea>
+          {#if "error" in extraParsed}
+            <span class="small error-text">{extraParsed.error}</span>
+          {:else}
+            <span class="hint">Extra fields for each request to this provider. Empty: no extra fields. Do not put API keys here.</span>
+          {/if}
+        </label>
         <p class="hint">
           Empty fields use the defaults. A page that is longer than the context length is read in parts.
           A long page with many jobs needs more tokens per reply.
@@ -268,6 +297,15 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 12px;
+  }
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+  }
+
+  .invalid {
+    border-color: var(--danger);
   }
 
   details {

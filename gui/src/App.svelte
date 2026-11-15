@@ -240,7 +240,7 @@
 <div class="app">
   <header>
     <div class="brand">
-      <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
+      <svg class="logo" class:spinning={running || !!writingFor} viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
         <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2" opacity="0.35" />
         <circle cx="16" cy="16" r="8.5" fill="none" stroke="currentColor" stroke-width="2" opacity="0.6" />
         <path d="M16 16 L16 2 A14 14 0 0 1 28.1 9 Z" fill="currentColor" opacity="0.85" />
@@ -343,6 +343,23 @@
     align-items: center;
     gap: 9px;
     color: var(--accent);
+  }
+
+  /* The radar turns while a search or a cover letter is running. */
+  .logo.spinning {
+    animation: radar-spin 1.6s linear infinite;
+  }
+
+  @keyframes radar-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .logo.spinning {
+      animation-duration: 6s;
+    }
   }
 
   .brand h1 {

@@ -191,6 +191,11 @@ pub struct ProviderConfig {
     /// tests). Without it, the provider's default is used.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
+    /// Extra top-level fields for the JSON body of each request, for example
+    /// `{"mode": "non-private"}`. A field that the request already has is replaced.
+    /// Do not put API keys here: they stay in `.env`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_body: Option<BTreeMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -243,6 +248,7 @@ impl Default for Config {
             effort: None,
             context_length: None,
             temperature: None,
+            extra_body: None,
         };
         Self {
             active: "local".to_string(),
@@ -353,6 +359,35 @@ mod tests {
         let sources = again.expand().unwrap();
         assert_eq!(sources[0].url, "https://a.de/?r=25");
         assert!(!sources[0].enabled);
+    }
+
+    #[test]
+    fn extra_body_loads_and_saves() {
+        let text = "active: l\nproviders:\n  l:\n    type: openai\n    model: leiolai-1\n    \
+                    base_url: https://api.leiolai.com/v1\n    api_key_env: LEIOLAI_API_KEY\n    \
+                    extra_body: {\"mode\": \"non-private\", \"opts\": {\"n\": 2}}\n";
+        let config: Config = serde_yaml::from_str(text).unwrap();
+        let extra = config.providers["l"].extra_body.as_ref().unwrap();
+        assert_eq!(extra["mode"], "non-private");
+        assert_eq!(extra["opts"]["n"], 2);
+
+        let saved = serde_yaml::to_string(&config).unwrap();
+        let again: Config = serde_yaml::from_str(&saved).unwrap();
+        assert_eq!(
+            again.providers["l"].extra_body,
+            config.providers["l"].extra_body
+        );
+
+        // Without extra_body, the saved file has no extra_body line.
+        let plain: Config =
+            serde_yaml::from_str("active: l\nproviders:\n  l:\n    type: ollama\n    model: m\n")
+                .unwrap();
+        assert!(plain.providers["l"].extra_body.is_none());
+        assert!(
+            !serde_yaml::to_string(&plain)
+                .unwrap()
+                .contains("extra_body")
+        );
     }
 
     #[test]

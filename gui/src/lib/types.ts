@@ -11,6 +11,8 @@ export interface ProviderConfig {
   effort?: string | null;
   context_length?: number | null;
   temperature?: number | null;
+  /** Extra top-level fields for the JSON body of each request. */
+  extra_body?: Record<string, unknown> | null;
 }
 
 export interface Config {
@@ -86,6 +88,24 @@ export interface PageTest {
   url: string;
   chars: number;
   preview: string;
+}
+
+/**
+ * Reads the "extra request body" text of a provider. Empty text gives null (no extra fields).
+ * The text must be a JSON object, for example {"mode": "non-private"}.
+ */
+export function parseExtraBody(text: string): { value: Record<string, unknown> | null } | { error: string } {
+  if (!text.trim()) return { value: null };
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (e) {
+    return { error: `Not valid JSON: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return { error: 'The extra fields must be a JSON object, for example {"mode": "non-private"}.' };
+  }
+  return { value: Object.keys(value).length > 0 ? (value as Record<string, unknown>) : null };
 }
 
 /** The environment variable for the API key of a provider; null if it needs none. */

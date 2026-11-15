@@ -25,7 +25,6 @@
 <section class="card status">
   {#if running}
     <div class="line">
-      <span class="spinner" aria-hidden="true"></span>
       <span class="phase">{phase}</span>
       {#if current}
         <span class="muted small">{Math.min(doneCount + 1, current.total)} of {current.total}</span>
@@ -69,15 +68,6 @@
     white-space: nowrap;
   }
 
-  .spinner {
-    width: 14px;
-    height: 14px;
-    border: 2px solid var(--accent-soft);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
   .bar {
     height: 6px;
     border-radius: 999px;
@@ -118,12 +108,6 @@
     color: var(--danger);
   }
 
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
   @keyframes slide {
     from {
       transform: translateX(-100%);
@@ -134,7 +118,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .spinner,
     .bar.indeterminate > div {
       animation: none;
     }
