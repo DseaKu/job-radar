@@ -11,10 +11,11 @@ pub struct Args {
     pub kill_dups: bool,
     pub verbose: bool,
     pub print_results: bool,
+    pub dump: Option<String>,
 }
 
 const USAGE: &str = "\
-Usage: job_radar [--cv <cv.txt|cv.pdf>] [--out <jobs.csv>] [--kill-dups] [-v] [-p] [<url> ...]
+Usage: job_radar [--cv <cv.txt|cv.pdf>] [--out <jobs.csv>] [--kill-dups] [-v] [-p] [--dump <dir>] [<url> ...]
        job_radar convert-cv <cv.pdf> [<cv.txt>]
        job_radar page-text <url>
 
@@ -24,6 +25,8 @@ Without URLs, the enabled sources in sources.yaml are read.
 `-v`, `--verbose` shows the progress and the token usage.
 `-p`, `--print-results` prints a table of the best jobs to stdout.
 Without them, only warnings, errors and the result line are shown.
+`--dump <dir>` writes two files for each website into <dir>: the page text that the AI got
+(<name>.page.txt) and all jobs found on it, before the ignore list (<name>.jobs.txt).
 
 The CV comes from --cv, or from stdin if no --cv is given:
   pbpaste | job_radar https://example.com/careers
@@ -38,6 +41,7 @@ struct Flags {
     kill_dups: bool,
     verbose: bool,
     print_results: bool,
+    dump: Option<String>,
     help: bool,
 }
 
@@ -50,6 +54,7 @@ fn parse_flags(args: impl IntoIterator<Item = String>) -> Res<Flags> {
         kill_dups: false,
         verbose: false,
         print_results: false,
+        dump: None,
         help: false,
     };
     let mut args = args.into_iter();
@@ -60,6 +65,7 @@ fn parse_flags(args: impl IntoIterator<Item = String>) -> Res<Flags> {
             "--kill-dups" => flags.kill_dups = true,
             "-v" | "--verbose" => flags.verbose = true,
             "-p" | "--print-results" => flags.print_results = true,
+            "--dump" => flags.dump = Some(args.next().ok_or("--dump needs a folder")?),
             "-h" | "--help" | "help" => flags.help = true,
             _ if arg.starts_with('-') => return Err(format!("unknown option: {arg}").into()),
             _ => flags.urls.push(arg),
@@ -91,6 +97,7 @@ pub fn parse_args() -> Res<Args> {
         kill_dups: flags.kill_dups,
         verbose: flags.verbose,
         print_results: flags.print_results,
+        dump: flags.dump,
     })
 }
 
@@ -123,7 +130,14 @@ mod tests {
     fn defaults() {
         let f = parse(&[]).unwrap();
         assert_eq!(f.out, "jobs.csv");
-        assert!(f.cv_path.is_none() && f.urls.is_empty() && !f.kill_dups && !f.verbose && !f.print_results && !f.help);
+        assert!(
+            f.cv_path.is_none()
+                && f.urls.is_empty()
+                && !f.kill_dups
+                && !f.verbose
+                && !f.print_results
+                && !f.help
+        );
     }
 
     #[test]
@@ -146,6 +160,10 @@ mod tests {
         assert!(f.kill_dups && f.verbose && f.print_results && !f.help);
         assert!(parse(&["--verbose", "--out", "x.csv"]).unwrap().verbose);
         assert!(parse(&["--print-results"]).unwrap().print_results);
+        assert_eq!(
+            parse(&["--dump", "dump"]).unwrap().dump.as_deref(),
+            Some("dump")
+        );
         assert!(parse(&["help"]).unwrap().help);
     }
 
@@ -155,5 +173,6 @@ mod tests {
         assert_eq!(err(&["--cv"]), "--cv needs a file path");
         assert_eq!(err(&["--out"]), "--out needs a file path");
         assert_eq!(err(&["--verbos"]), "unknown option: --verbos");
+        assert_eq!(err(&["--dump"]), "--dump needs a folder");
     }
 }

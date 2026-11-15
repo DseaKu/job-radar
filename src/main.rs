@@ -20,6 +20,7 @@ mod backend;
 mod config;
 mod cv;
 mod dedup;
+mod dump;
 mod fetch;
 mod ignore;
 mod input;
@@ -75,10 +76,27 @@ async fn main() -> Res<()> {
     let mut failed = 0;
     // Token usage of each step, for the table at the end.
     let mut usage: Vec<(String, Usage)> = Vec::new();
+    let mut dump = args.dump.as_deref().map(dump::Dump::new).transpose()?;
     for (name, url) in &targets {
         info!("Reading {name} ...");
         let before = backend.usage();
-        match jobs::from_url(&backend, &http, &args.cv, url, &config.output_language).await {
+        let stem = dump.as_mut().map(|d| d.stem(name));
+        let result = async {
+            let text = fetch::page_text(&http, url).await?;
+            if let (Some(d), Some(stem)) = (&dump, &stem)
+                && let Err(e) = d.write_page(stem, &text)
+            {
+                eprintln!("warning: {e}");
+            }
+            jobs::from_text(&backend, &args.cv, url, &text, &config.output_language).await
+        }
+        .await;
+        if let (Some(d), Some(stem)) = (&dump, &stem)
+            && let Err(e) = d.write_jobs(stem, name, url, &result, &ignore_rules)
+        {
+            eprintln!("warning: {e}");
+        }
+        match result {
             Ok(found) => {
                 info!("  {} jobs found", found.len());
                 rows.extend(found);

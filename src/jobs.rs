@@ -5,7 +5,6 @@ use serde_json::Value;
 
 use crate::Res;
 use crate::backend::{Backend, ReplyCutOff};
-use crate::fetch;
 
 /// Below this page budget, the model would see too little of the page to be useful.
 const MIN_PAGE_CHARS: usize = 2_000;
@@ -43,15 +42,14 @@ pub struct JobRow {
     pub source: String,
 }
 
-/// Fetches one page, asks the LLM for the jobs on it, and returns them as rows.
-pub async fn from_url(
+/// Asks the LLM for the jobs in the text of one page (from `fetch::page_text`) and returns them as rows.
+pub async fn from_text(
     backend: &Backend,
-    http: &reqwest::Client,
     cv: &str,
     url: &str,
+    text: &str,
     language: &str,
 ) -> Res<Vec<JobRow>> {
-    let text = fetch::page_text(http, url).await?;
     if text.trim().is_empty() {
         return Err(format!(
             "{url}: the page has no visible text (it probably needs JavaScript to render)"
@@ -74,7 +72,7 @@ pub async fn from_url(
         )
         .into());
     }
-    let mut chunks = split_chunks(&text, budget, budget / 10);
+    let mut chunks = split_chunks(text, budget, budget / 10);
     if chunks.len() > MAX_CHUNKS {
         eprintln!(
             "  warning: the page needs {} slices, only the first {MAX_CHUNKS} are read; \

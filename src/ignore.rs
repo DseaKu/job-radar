@@ -86,7 +86,7 @@ pub fn load() -> Res<Vec<Rule>> {
     parse(&text).map_err(|e| format!("invalid {path}: {e}").into())
 }
 
-fn parse(text: &str) -> Res<Vec<Rule>> {
+pub(crate) fn parse(text: &str) -> Res<Vec<Rule>> {
     // A file with only comments is valid: it is an empty list.
     if text
         .lines()
@@ -118,10 +118,15 @@ fn parse(text: &str) -> Res<Vec<Rule>> {
     Ok(file.ignore)
 }
 
+/// True if a rule matches this row.
+pub fn is_ignored(row: &JobRow, rules: &[Rule]) -> bool {
+    rules.iter().any(|r| r.matches(row))
+}
+
 /// Removes the rows that match a rule. Returns the number of removed rows.
 pub fn apply(rows: &mut Vec<JobRow>, rules: &[Rule]) -> usize {
     let before = rows.len();
-    rows.retain(|row| !rules.iter().any(|r| r.matches(row)));
+    rows.retain(|row| !is_ignored(row, rules));
     before - rows.len()
 }
 

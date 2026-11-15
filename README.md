@@ -95,6 +95,7 @@ demo/run.sh
 | `--kill-dups` | One more LLM call that merges the same job from different platforms. |
 | `-v`, `--verbose` | Shows the progress and the token usage. |
 | `-p`, `--print-results` | Prints a table of the 10 best jobs to stdout. Without `-v` and `-p`, only warnings, errors and the result line appear. |
+| `--dump <dir>` | Writes two files for each website into `<dir>`: the page text that the AI got (`<name>.page.txt`) and all jobs found on it, before the ignore list (`<name>.jobs.txt`, ignored jobs are marked). |
 | `convert-cv <pdf>` | Converts a PDF CV to `cv.txt` once. |
 | `page-text <url>` | Shows the page text without an LLM call. Use it to test a new source. |
 | *(no URLs)* | Reads the URLs from `sources.yaml`. |
