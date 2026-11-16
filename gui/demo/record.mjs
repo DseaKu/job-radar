@@ -141,8 +141,7 @@ async function letterScene(page) {
   await click(page, page.getByRole("button", { name: "Show in folder" }));
   await sleep(300);
   await showLetter(page);
-  await sleep(1500);
-  await page.evaluate(() => window.demoLetter.scroll());
+  // Leave the PDF as it is, so that the viewer can read the first lines.
   await sleep(4500);
 }
 
@@ -160,17 +159,12 @@ async function showLetter(page) {
       '<span style="width:12px;height:12px;border-radius:50%;background:#febc2e"></span>' +
       '<span style="width:12px;height:12px;border-radius:50%;background:#28c840"></span>' +
       '<span style="margin-left:10px">cover_letter.pdf</span></div>' +
-      '<div style="flex:1;overflow:hidden"><img src="/demo/letter.png" style="display:block;width:100%;transition:transform 3.5s ease-in-out"></div>';
+      '<div style="flex:1;overflow:hidden"><img src="/demo/letter.png" style="display:block;width:100%"></div>';
     document.body.append(win);
     requestAnimationFrame(() => {
       win.style.opacity = "1";
       win.style.transform = "translate(-50%,-50%) scale(1)";
     });
-    const img = win.querySelector("img");
-    window.demoLetter = {
-      // Move to the letter text: the page is taller than the window.
-      scroll: () => (img.style.transform = `translateY(-${img.offsetHeight - (win.offsetHeight - 34)}px)`),
-    };
   });
   await page.locator('img[src="/demo/letter.png"]').evaluate((img) => img.decode());
 }
