@@ -1,9 +1,12 @@
-// Records demo/gui.gif: the real GUI frontend in Chromium, with the fake backend from demo/mock.ts.
-// No Tauri, no LLM and no API key needed. Needs ffmpeg.
+// Records the GIFs of the README: the real GUI frontend in Chromium, with the fake backend from
+// demo/mock.ts. No Tauri, no LLM and no API key needed. Needs ffmpeg.
 //
 //   cd gui
 //   npm install && npx playwright install chromium
-//   npm run demo:gif
+//   npm run demo:gif          # demo/gui.gif: drop the CV, find jobs, read the details
+//   npm run demo:letter-gif   # demo/letter.gif: write a cover letter draft for a job
+//
+// demo/letter.png is the PDF of a fictional letter, made with the built-in LaTeX template.
 
 import { createServer } from "vite";
 import { chromium } from "playwright";
@@ -14,7 +17,9 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const GUI = resolve(fileURLToPath(import.meta.url), "../..");
-const OUT = resolve(GUI, "../demo/gui.gif");
+const SCENE = process.argv[2] ?? "gui";
+if (!["gui", "letter"].includes(SCENE)) throw new Error(`unknown scene: ${SCENE} (gui or letter)`);
+const OUT = resolve(GUI, `../demo/${SCENE}.gif`);
 const SIZE = { width: 1100, height: 720 };
 const FPS = 12;
 const GIF_WIDTH = 900;
@@ -30,6 +35,8 @@ try {
   await page.goto("http://localhost:1421/demo/index.html");
   await page.getByText("Drop your CV here").waitFor();
   await addCursor(page);
+  // The letter scene starts with a finished search; the setup is not recorded.
+  if (SCENE === "letter") await prepareResults(page);
 
   // Capture frames while the script below drives the app.
   const shots = [];
@@ -46,6 +53,35 @@ try {
     }
   })();
 
+  if (SCENE === "letter") await letterScene(page);
+  else await guiScene(page);
+
+  recording = false;
+  await capture;
+
+
+  // Each frame is shown until the next one was taken, so the GIF has the real timing.
+  const list = shots.map((s, i) => {
+    const next = shots[i + 1]?.t ?? s.t + 2000;
+    return `file '${s.file}'\nduration ${((next - s.t) / 1000).toFixed(3)}`;
+  });
+  list.push(`file '${shots.at(-1).file}'`);
+  const listFile = join(frames, "frames.txt");
+  writeFileSync(listFile, list.join("\n"));
+
+  const filter =
+    `fps=${FPS},scale=${GIF_WIDTH}:-1:flags=lanczos,split[a][b];` +
+    `[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`;
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listFile, "-vf", filter, OUT]);
+  console.log(`Wrote ${OUT} (${shots.length} frames)`);
+} finally {
+  await browser.close();
+  await server.close();
+  rmSync(frames, { recursive: true, force: true });
+}
+
+// Drop the CV, find jobs, read the details of the best match and filter the list.
+async function guiScene(page) {
   // 1. Drag the CV from the bottom-left corner onto the drop zone.
   await page.mouse.move(70, 610);
   await sleep(900);
@@ -81,28 +117,62 @@ try {
   await click(page, page.getByPlaceholder("Filter"));
   await page.keyboard.type("nordlicht", { delay: 90 });
   await sleep(2500);
+}
 
-  recording = false;
-  await capture;
+// The search is done before the recording starts: drop the CV and find jobs, without delays.
+async function prepareResults(page) {
+  await page.evaluate(() => window.demo.drop());
+  await page.getByText("107 words").waitFor();
+  await page.getByRole("button", { name: "Find jobs" }).click();
+  await page.getByText("Found 6 jobs").waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: "Close", exact: true }).click(); // the result message
+  await page.mouse.move(980, 120);
+}
 
-  // Each frame is shown until the next one was taken, so the GIF has the real timing.
-  const list = shots.map((s, i) => {
-    const next = shots[i + 1]?.t ?? s.t + 2000;
-    return `file '${s.file}'\nduration ${((next - s.t) / 1000).toFixed(3)}`;
+// Select the best match, write a cover letter draft and show the PDF.
+async function letterScene(page) {
+  await sleep(800);
+  await click(page, page.locator("tbody tr").first());
+  await sleep(1500);
+  await click(page, page.getByRole("button", { name: "Write application" }));
+  // The logo turns and the button says "Writing the application ...".
+  await page.getByText("is ready").waitFor({ timeout: 20000 });
+  await sleep(1800);
+  await click(page, page.getByRole("button", { name: "Show in folder" }));
+  await sleep(300);
+  await showLetter(page);
+  await sleep(1500);
+  await page.evaluate(() => window.demoLetter.scroll());
+  await sleep(4500);
+}
+
+// A preview window with the PDF page (instead of the Finder window of the real app).
+async function showLetter(page) {
+  await page.evaluate(() => {
+    const win = document.createElement("div");
+    win.style.cssText =
+      "position:fixed;left:50%;top:50%;width:560px;height:640px;z-index:99998;transform:translate(-50%,-48%) scale(.96);" +
+      "opacity:0;transition:opacity .35s, transform .35s;display:flex;flex-direction:column;border-radius:12px;" +
+      "overflow:hidden;background:#fff;box-shadow:0 24px 70px rgba(0,0,0,.35);border:1px solid #c9ccd3;";
+    win.innerHTML =
+      '<div style="flex:none;height:34px;display:flex;align-items:center;gap:7px;padding:0 12px;background:#eceef1;border-bottom:1px solid #d5d8de;font:13px system-ui;color:#333">' +
+      '<span style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></span>' +
+      '<span style="width:12px;height:12px;border-radius:50%;background:#febc2e"></span>' +
+      '<span style="width:12px;height:12px;border-radius:50%;background:#28c840"></span>' +
+      '<span style="margin-left:10px">cover_letter.pdf</span></div>' +
+      '<div style="flex:1;overflow:hidden"><img src="/demo/letter.png" style="display:block;width:100%;transition:transform 3.5s ease-in-out"></div>';
+    document.body.append(win);
+    requestAnimationFrame(() => {
+      win.style.opacity = "1";
+      win.style.transform = "translate(-50%,-50%) scale(1)";
+    });
+    const img = win.querySelector("img");
+    window.demoLetter = {
+      // Move to the letter text: the page is taller than the window.
+      scroll: () => (img.style.transform = `translateY(-${img.offsetHeight - (win.offsetHeight - 34)}px)`),
+    };
   });
-  list.push(`file '${shots.at(-1).file}'`);
-  const listFile = join(frames, "frames.txt");
-  writeFileSync(listFile, list.join("\n"));
-
-  const filter =
-    `fps=${FPS},scale=${GIF_WIDTH}:-1:flags=lanczos,split[a][b];` +
-    `[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`;
-  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listFile, "-vf", filter, OUT]);
-  console.log(`Wrote ${OUT} (${shots.length} frames)`);
-} finally {
-  await browser.close();
-  await server.close();
-  rmSync(frames, { recursive: true, force: true });
+  await page.locator('img[src="/demo/letter.png"]').evaluate((img) => img.decode());
 }
 
 function sleep(ms) {

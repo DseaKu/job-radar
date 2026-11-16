@@ -21,6 +21,19 @@ flowchart LR
     IGN --> CSV["📊 jobs.csv"]
 ```
 
+## Cover letter drafts
+
+For a job that you like, click _Write application_. job_radar writes a **cover letter draft**
+from your CV and the job posting: a LaTeX file (and a PDF, if LaTeX is installed) in its own
+folder.
+
+![Select a job, click Write application, get a LaTeX and PDF draft](demo/letter.gif)
+<sub>Fictional demo data.</sub>
+
+Use the draft as a template, not as a finished letter. The AI uses only facts from your CV,
+but you must check the text, change it and make it your own before you send it. Your own
+layout and your fixed data go into `letter.yaml`. See [Applications](docs/applications.md).
+
 ## Quick start
 
 You need a model: [Ollama](https://ollama.com/) (free, local) or an API key for

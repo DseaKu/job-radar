@@ -8,7 +8,8 @@
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "tauri": "tauri",
-    "demo:gif": "node demo/record.mjs"
+    "demo:gif": "node demo/record.mjs gui",
+    "demo:letter-gif": "node demo/record.mjs letter"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

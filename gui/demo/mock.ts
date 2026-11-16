@@ -16,6 +16,8 @@ const settings: Settings = {
     providers: { claude: { type: "anthropic", model: "claude-haiku-5-5" } },
     output_language: "English",
     extra_instructions: "",
+    applications_dir: "~/Documents/applications",
+    application_instructions: "",
   },
   vars: { port: 8765 },
   sources: [
@@ -124,6 +126,21 @@ async function fakeRun() {
   });
 }
 
+/** "Write application": the AI call and the LaTeX build take a few seconds. */
+async function fakeLetter(row: JobRow) {
+  await log(`Writing the application: ${row.title} at ${row.company} ...`);
+  await wait(900);
+  await log(`  reading the job page ${row.url} ...`);
+  await wait(1500);
+  await log("  building the PDF ...");
+  await wait(900);
+  const folder = `${row.company} ${row.title}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `/Users/alex/Documents/applications/${folder}/cover_letter.pdf`;
+}
+
 mockWindows("main");
 mockIPC(
   async (cmd, args) => {
@@ -150,6 +167,12 @@ mockIPC(
         return "OK: claude-haiku-5-5 answered.";
       case "plugin:dialog|open":
         return CV_PATH;
+      case "write_application":
+        return fakeLetter((args as { row: JobRow }).row);
+      case "plugin:opener|reveal_item_in_dir":
+        // The recording script shows the letter instead of a Finder window.
+        window.dispatchEvent(new Event("demo-reveal"));
+        return null;
       default:
         return null;
     }
