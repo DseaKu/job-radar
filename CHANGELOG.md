@@ -11,9 +11,10 @@ version numbers follow [Semantic Versioning](https://semver.org/).
 
 - `job_radar init` creates the missing settings files (`config.yaml`, `sources.yaml`,
   `ignore.yaml`, `letter.yaml`) from the examples. The examples are built into the program, so
-  this also works in Docker. Files that exist are not changed.
+  this also works in Docker. Files that exist are not changed. ([#4])
 - When settings files are missing, a search (or `application`) asks (y/N) to create them from
   the examples. Without a terminal (for example Docker without `-it`), it shows a hint instead.
+  ([#4])
 
 ### Changed
 
@@ -59,3 +60,4 @@ version numbers follow [Semantic Versioning](https://semver.org/).
 [#1]: https://github.com/DseaKu/job-radar/pull/1
 [#2]: https://github.com/DseaKu/job-radar/pull/2
 [#3]: https://github.com/DseaKu/job-radar/pull/3
+[#4]: https://github.com/DseaKu/job-radar/pull/4
