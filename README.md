@@ -64,10 +64,11 @@ than the Ollama default, add `config.yaml` (template:
 [`config.example.yaml`](config.example.yaml)). Then run in this folder:
 
 ```sh
-docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt -v -p
+docker run --rm --pull always -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt -v -p
 ```
 
-The result is in `jobs.csv`. On Linux, see [Docker](docs/docker.md).
+The result is in `jobs.csv`. `--pull always` gets the newest image. Without it, Docker uses an old
+local copy, and new options can fail with `unknown option`. On Linux, see [Docker](docs/docker.md).
 
 ### Rust
 
