@@ -1,5 +1,7 @@
 mod input;
 
+use std::process::ExitCode;
+
 use job_radar::backend::{Backend, Usage};
 use job_radar::config::{self, Config};
 use job_radar::{Level, Res, application, cv, fetch, ignore, jobs, run};
@@ -8,7 +10,18 @@ use job_radar::{Level, Res, application, cv, fetch, ignore, jobs, run};
 const TABLE_ROWS: usize = 10;
 
 #[tokio::main]
-async fn main() -> Res<()> {
+async fn main() -> ExitCode {
+    match cli().await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            // Display, not Debug: no quotation marks around the message.
+            eprintln!("Error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn cli() -> Res<()> {
     // Load secrets (API tokens) from a .env file if one exists.
     dotenvy::dotenv().ok();
 
