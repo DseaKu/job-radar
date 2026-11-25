@@ -32,6 +32,14 @@ docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar page-text https://examp
 pbpaste | docker run --rm -i -v "$PWD:/work" ghcr.io/dseaku/job-radar   # CV from stdin: add -i
 ```
 
+Missing settings files: `init` creates `config.yaml`, `sources.yaml`, `ignore.yaml` and
+`letter.yaml` from the examples in the image. Files that exist are not changed. With `-it`, a
+search also asks (y/N) when a file is missing; without `-it`, it shows a hint.
+
+```sh
+docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar init
+```
+
 Tip: make an alias, then use `job_radar` as if it was installed:
 
 ```sh

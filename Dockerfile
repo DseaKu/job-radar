@@ -15,6 +15,8 @@ WORKDIR /src
 
 # Build the dependencies first, so that a change in src/ does not build them again.
 COPY Cargo.toml Cargo.lock ./
+# The examples are built into the program (`job_radar init`).
+COPY *.example.yaml ./
 RUN mkdir src && echo 'fn main() {}' > src/main.rs \
  && cargo build --release --locked \
  && rm -rf src

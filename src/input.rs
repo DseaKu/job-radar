@@ -19,9 +19,12 @@ Usage: job_radar [--cv <cv.txt|cv.pdf>] [--out <jobs.csv>] [--kill-dups] [-v] [-
        job_radar application [--cv <cv.txt|cv.pdf>] [--jobs <jobs.csv>] <number|url>
        job_radar convert-cv <cv.pdf> [<cv.txt>]
        job_radar page-text <url>
+       job_radar init
 
 Without URLs, the enabled sources in sources.yaml are read.
 `page-text` prints the text the AI would see (no AI call), to test a new source.
+`init` creates the missing settings files (config.yaml, sources.yaml, ignore.yaml,
+letter.yaml) from the examples. A search also asks for this when files are missing.
 `--kill-dups` makes one more AI call that merges the same job found on several platforms.
 `-v`, `--verbose` shows the progress and the token usage.
 `-p`, `--print-results` prints a table of the best jobs to stdout.
