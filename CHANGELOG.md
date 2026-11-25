@@ -9,6 +9,9 @@ version numbers follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `Makefile` with short commands: `make search`, `make init`, `make page-text URL=...`,
+  `make application JOB=3` and more. They run Docker by default, or cargo with `LOCAL=1`. On
+  Linux, they add the Docker options for Ollama and file owners. `make` shows the list. ([#5])
 - `job_radar init` creates the missing settings files (`config.yaml`, `sources.yaml`,
   `ignore.yaml`, `letter.yaml`) from the examples. The examples are built into the program, so
   this also works in Docker. Files that exist are not changed. ([#4])
@@ -18,6 +21,8 @@ version numbers follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The Docker commands in the README and in `docs/docker.md` use `-it`, so job_radar can ask
+  (y/N) to create missing settings files. Without `-it`, the hint in Docker tells you to add it. ([#5])
 - The search stops at the first page when the AI provider rejects the API key (HTTP 401 or
   403). It shows one short message with the name of the key variable and what to do.
   Before, the same long error came for each page. ([#2])
@@ -61,3 +66,4 @@ version numbers follow [Semantic Versioning](https://semver.org/).
 [#2]: https://github.com/DseaKu/job-radar/pull/2
 [#3]: https://github.com/DseaKu/job-radar/pull/3
 [#4]: https://github.com/DseaKu/job-radar/pull/4
+[#5]: https://github.com/DseaKu/job-radar/pull/5

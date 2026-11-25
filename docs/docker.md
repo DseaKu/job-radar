@@ -12,14 +12,14 @@ Your files stay on your machine. Mount your folder to `/work`: the program reads
 macOS and Windows (Docker Desktop):
 
 ```sh
-docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt
+docker run --rm -it -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt
 ```
 
 Linux: add two options. The first one makes Ollama on the host reachable. The second one
 makes `jobs.csv` belong to you, not to root:
 
 ```sh
-docker run --rm -v "$PWD:/work" \
+docker run --rm -it -v "$PWD:/work" \
   --add-host=host.docker.internal:host-gateway \
   --user "$(id -u):$(id -g)" \
   ghcr.io/dseaku/job-radar --cv cv.txt

@@ -88,9 +88,13 @@ fn is_yes(answer: &str) -> bool {
     matches!(answer.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
+fn in_docker() -> bool {
+    Path::new("/.dockerenv").exists()
+}
+
 /// The command that runs `init`: inside the Docker image, the full `docker run` command.
 fn init_command() -> &'static str {
-    if Path::new("/.dockerenv").exists() {
+    if in_docker() {
         "docker run --rm -v \"$PWD:/work\" ghcr.io/dseaku/job-radar init"
     } else {
         "job_radar init"
@@ -110,8 +114,14 @@ pub fn offer(wanted: &[&Example]) -> Res<()> {
         _ => (names(&missing), "are", "them"),
     };
     if !(io::stdin().is_terminal() && io::stderr().is_terminal()) {
+        // Docker without -it has no terminal: with -it, the next run can ask.
+        let ask = if in_docker() {
+            " Or add -it after docker run: then job_radar asks."
+        } else {
+            ""
+        };
         eprintln!(
-            "hint: {names} {verb} missing. To create {them} from the examples, run: {}",
+            "hint: {names} {verb} missing. To create {them} from the examples, run: {}.{ask}",
             init_command()
         );
         return Ok(());
