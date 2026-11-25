@@ -21,6 +21,8 @@ version numbers follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- README: new section "Make commands" with all commands of the Makefile. The quick start, the
+  desktop build and the demo use the short `make` commands. ([#6])
 - The Docker commands in the README and in `docs/docker.md` use `-it`, so job_radar can ask
   (y/N) to create missing settings files. Without `-it`, the hint in Docker tells you to add it. ([#5])
 - The search stops at the first page when the AI provider rejects the API key (HTTP 401 or
@@ -67,3 +69,4 @@ version numbers follow [Semantic Versioning](https://semver.org/).
 [#3]: https://github.com/DseaKu/job-radar/pull/3
 [#4]: https://github.com/DseaKu/job-radar/pull/4
 [#5]: https://github.com/DseaKu/job-radar/pull/5
+[#6]: https://github.com/DseaKu/job-radar/pull/6

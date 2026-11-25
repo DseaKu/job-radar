@@ -52,8 +52,7 @@ anyway_.
 In _Settings_, select the provider, paste the API key and add your search pages.
 Then drop your CV into the window and click _Find jobs_. To write a cover letter
 (LaTeX) for a job, select it and click _Write application_. To build the app
-yourself: `cd gui && npm install && npm run tauri build` (needs Rust, Node.js
-and on Linux the
+yourself: `make gui-build` (needs Rust, Node.js and on Linux the
 [Tauri packages](https://v2.tauri.app/start/prerequisites/#linux)).
 
 ### Docker (recommended for the command line)
@@ -72,9 +71,8 @@ The result is in `jobs.csv`. `--pull always` gets the newest image. Without it, 
 local copy, and new options can fail with `unknown option`. With `-it`, job_radar can ask (y/N) to
 create missing settings files from the examples. On Linux, see [Docker](docs/docker.md).
 
-In a clone of this repository, `make search` runs the same command (also on Linux). Run `make`
-to see all short commands, for example `make init`, `make page-text URL=...` and
-`make application JOB=3`.
+In a clone of this repository, `make search` runs the same command (also on Linux). See
+[Make commands](#make-commands).
 
 ### Rust
 
@@ -82,14 +80,32 @@ Needs Rust 1.88 or newer.
 
 ```sh
 git clone https://github.com/DseaKu/job-radar && cd job-radar
-cp sources.example.yaml sources.yaml   # and optional config.example.yaml → config.yaml
-cargo run --release -- --cv cv.txt
+make init LOCAL=1     # creates sources.yaml, config.yaml, ... from the examples
+make search LOCAL=1   # same as: cargo run --release -- --cv cv.txt -v -p
 ```
 
-Or use the Makefile with `LOCAL=1`: `make search LOCAL=1`.
-
 **Demo** with fictional data (needs Rust, Python 3 and Ollama, about 1 minute):
-`ollama pull qwen3:1.7b && demo/run.sh`
+`ollama pull qwen3:1.7b && make demo`
+
+## Make commands
+
+In a clone of this repository, the [`Makefile`](Makefile) gives short commands. `make` shows
+the list. The commands run the Docker image; add `LOCAL=1` to use the code in the folder with
+cargo. `CV=<file>` sets the CV (default `cv.txt`).
+
+| Command                       | Effect                                                              |
+| ----------------------------- | ------------------------------------------------------------------- |
+| `make search`                 | Finds and rates jobs (`-v -p`). More options: `ARGS="--kill-dups"`. |
+| `make init`                   | Creates the missing settings files (`*.yaml`) from the examples.    |
+| `make page-text URL=<url>`    | Shows the page text without an LLM call.                            |
+| `make application JOB=<n>`    | Writes a cover letter for job `n` of the CSV (or a job URL).        |
+| `make convert-cv PDF=<file>`  | Converts a PDF CV to `cv.txt`.                                      |
+| `make test`                   | Runs the unit tests.                                                |
+| `make lint` / `make fmt`      | Checks the format and runs clippy / formats the code.               |
+| `make check`                  | All CI checks (`lint` and `test`).                                  |
+| `make demo`                   | Runs the demo with fictional data.                                  |
+| `make gui` / `make gui-build` | Starts the desktop app in development mode / builds it.             |
+| `make docker-build`           | Builds the Docker image from the folder (tag `job-radar`).          |
 
 ## Options
 
