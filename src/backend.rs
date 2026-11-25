@@ -66,18 +66,19 @@ impl std::fmt::Display for ReplyCutOff {
 
 impl std::error::Error for ReplyCutOff {}
 
-/// The provider rejected the API key (HTTP 401 or 403). All further requests fail the same
-/// way, so a search stops at the first one.
+/// The provider cannot answer any request: it rejected the API key (HTTP 401 or 403), or there
+/// is no connection to it. All further requests fail the same way, so a search stops at the
+/// first one.
 #[derive(Debug)]
-pub struct KeyRejected(String);
+pub struct ProviderUnusable(String);
 
-impl std::fmt::Display for KeyRejected {
+impl std::fmt::Display for ProviderUnusable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
     }
 }
 
-impl std::error::Error for KeyRejected {}
+impl std::error::Error for ProviderUnusable {}
 
 /// The LLM provider that the agents talk to, built from the active config entry.
 ///
@@ -479,7 +480,8 @@ impl Backend {
         self.status_error(status, &payload)
     }
 
-    /// The error for an HTTP error status and the parsed reply. 401 and 403 give [`KeyRejected`].
+    /// The error for an HTTP error status and the parsed reply. 401 and 403 give
+    /// [`ProviderUnusable`].
     fn status_error(
         &self,
         status: reqwest::StatusCode,
@@ -496,7 +498,7 @@ impl Backend {
     }
 
     /// A short message for a rejected API key: which key, the provider's reason, what to do.
-    fn key_rejected(&self, status: reqwest::StatusCode, payload: &Value) -> KeyRejected {
+    fn key_rejected(&self, status: reqwest::StatusCode, payload: &Value) -> ProviderUnusable {
         let reason = match &payload["error"]["message"] {
             Value::String(m) => m.clone(),
             _ => match payload {
@@ -506,7 +508,7 @@ impl Backend {
         };
         let name = &self.name;
         let Some(var) = &self.key_var else {
-            return KeyRejected(format!(
+            return ProviderUnusable(format!(
                 "{name} needs an API key ({status}: {reason}). Set api_key_env for this \
                  provider in config.yaml and put the key in .env."
             ));
@@ -516,14 +518,15 @@ impl Backend {
         } else {
             "Make a new key at the provider and put it in .env (app: Settings > AI provider)."
         };
-        KeyRejected(format!(
+        ProviderUnusable(format!(
             "{name} rejected the API key in {var} ({status}: {reason}). {todo}"
         ))
     }
 
     /// A readable message for a request without an HTTP reply: timeout, no connection and so on.
     /// reqwest's own message ("error sending request") hides the cause, so the causes are added.
-    fn request_error(&self, e: &reqwest::Error) -> String {
+    /// No connection gives [`ProviderUnusable`].
+    fn request_error(&self, e: &reqwest::Error) -> Box<dyn Error + Send + Sync> {
         let cause = crate::error_causes(e);
         let name = &self.name;
         if e.is_timeout() {
@@ -533,18 +536,23 @@ impl Backend {
                  (app: Settings > AI provider > Advanced).",
                 self.timeout
             )
+            .into()
         } else if e.is_connect() {
-            let hint = if self.kind == ProviderKind::Ollama {
-                " Is Ollama running? Start it with: ollama serve"
-            } else {
+            let hint = if self.kind != ProviderKind::Ollama {
                 " Check the base URL and your network."
+            } else if self.base_url.contains("host.docker.internal") {
+                // In the Docker image, Ollama runs on the host, not in the container.
+                " Is Ollama running on your computer? Start it with: ollama serve. On Linux, \
+                 also add --add-host=host.docker.internal:host-gateway to docker run."
+            } else {
+                " Is Ollama running? Start it with: ollama serve"
             };
-            format!(
+            Box::new(ProviderUnusable(format!(
                 "{name}: cannot connect to {} ({cause}).{hint}",
                 self.base_url
-            )
+            )))
         } else {
-            format!("{name}: the request failed ({cause}).")
+            format!("{name}: the request failed ({cause}).").into()
         }
     }
 }
@@ -670,8 +678,9 @@ mod tests {
         let err = backend_at("http://127.0.0.1:1", "")
             .chat("s", "u")
             .await
-            .unwrap_err()
-            .to_string();
+            .unwrap_err();
+        assert!(err.is::<ProviderUnusable>());
+        let err = err.to_string();
         assert!(
             err.starts_with("p: cannot connect to http://127.0.0.1:1 ("),
             "{err}"
@@ -717,7 +726,7 @@ mod tests {
         )
         .await;
         let err = backend_at(&url, "").chat("s", "u").await.unwrap_err();
-        assert!(err.is::<KeyRejected>());
+        assert!(err.is::<ProviderUnusable>());
         assert_eq!(
             err.to_string(),
             "p rejected the API key in PATH (401 Unauthorized: invalid x-api-key). \
