@@ -1,4 +1,5 @@
 mod input;
+mod setup;
 
 use std::process::ExitCode;
 
@@ -30,6 +31,9 @@ async fn cli() -> Res<()> {
     if argv.first().map(String::as_str) == Some("convert-cv") {
         return cv::convert_command(&argv[1..]);
     }
+    if argv.first().map(String::as_str) == Some("init") {
+        return setup::init();
+    }
 
     let http = job_radar::http_client()?;
 
@@ -47,6 +51,12 @@ async fn cli() -> Res<()> {
     }
 
     let args = input::parse_args()?;
+    // URLs on the command line make sources.yaml unnecessary.
+    if args.urls.is_empty() {
+        setup::offer(&[&setup::CONFIG, &setup::SOURCES, &setup::IGNORE])?;
+    } else {
+        setup::offer(&[&setup::CONFIG, &setup::IGNORE])?;
+    }
     // Without -v, only warnings and errors are shown.
     let verbose = args.verbose;
     job_radar::set_logger(move |level, msg| {
@@ -82,6 +92,7 @@ async fn cli() -> Res<()> {
 /// `job_radar application <number|url>`: writes a cover letter for one job.
 async fn application_command(argv: &[String], http: &reqwest::Client) -> Res<()> {
     let args = input::parse_application_args(argv)?;
+    setup::offer(&[&setup::CONFIG, &setup::LETTER])?;
     // One short step: show all progress messages.
     job_radar::set_logger(|_, msg| eprintln!("{msg}"));
     // A job link works without a CSV file; a row number needs one.

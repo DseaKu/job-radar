@@ -68,9 +68,7 @@ pub fn targets(
         urls.iter().map(|u| (u.clone(), u.clone())).collect()
     };
     if targets.is_empty() {
-        return Err("no URLs given and no enabled sources in sources.yaml \
-                    (create it with: cp sources.example.yaml sources.yaml)"
-            .into());
+        return Err("no URLs given and no enabled sources in sources.yaml".into());
     }
     Ok(targets)
 }

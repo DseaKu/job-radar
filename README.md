@@ -61,7 +61,8 @@ and on Linux the
 Put your CV (`cv.txt` or a PDF) and `sources.yaml` (template:
 [`sources.example.yaml`](sources.example.yaml)) in a folder. For a model other
 than the Ollama default, add `config.yaml` (template:
-[`config.example.yaml`](config.example.yaml)). Then run in this folder:
+[`config.example.yaml`](config.example.yaml)). To create these files from the examples, run
+`docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar init`. Then run in this folder:
 
 ```sh
 docker run --rm --pull always -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt -v -p
@@ -96,6 +97,7 @@ cargo run --release -- --cv cv.txt
 | `application <n>`       | Writes a cover letter for job `n` of the CSV (or a job URL): LaTeX + PDF. |
 | `convert-cv <pdf>`      | Converts a PDF CV to `cv.txt` once.                                       |
 | `page-text <url>`       | Shows the page text without an LLM call. Use it to test a new source.     |
+| `init`                  | Creates the missing settings files (`*.yaml`) from the examples.          |
 | _(no URLs)_             | Reads the URLs from `sources.yaml`.                                       |
 
 CSV columns:
@@ -128,7 +130,7 @@ providers:
 - Docs: [Sources](docs/sources.md) · [Ignore list](docs/ignore-list.md) ·
   [Applications](docs/applications.md) · [Providers](docs/providers.md) ·
   [Docker](docs/docker.md) · [How it works](docs/how-it-works.md) ·
-  [Testing](docs/testing.md)
+  [Testing](docs/testing.md) · [Changelog](CHANGELOG.md)
 - Built with Rust (tokio, reqwest, serde, csv, pdf-extract, dotenvy) and Tauri.
   The HTML-to-text parser is in `src/fetch.rs`.
 - License: [MIT](LICENSE)
