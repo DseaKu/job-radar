@@ -65,11 +65,16 @@ than the Ollama default, add `config.yaml` (template:
 `docker run --rm -v "$PWD:/work" ghcr.io/dseaku/job-radar init`. Then run in this folder:
 
 ```sh
-docker run --rm --pull always -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt -v -p
+docker run --rm -it --pull always -v "$PWD:/work" ghcr.io/dseaku/job-radar --cv cv.txt -v -p
 ```
 
 The result is in `jobs.csv`. `--pull always` gets the newest image. Without it, Docker uses an old
-local copy, and new options can fail with `unknown option`. On Linux, see [Docker](docs/docker.md).
+local copy, and new options can fail with `unknown option`. With `-it`, job_radar can ask (y/N) to
+create missing settings files from the examples. On Linux, see [Docker](docs/docker.md).
+
+In a clone of this repository, `make search` runs the same command (also on Linux). Run `make`
+to see all short commands, for example `make init`, `make page-text URL=...` and
+`make application JOB=3`.
 
 ### Rust
 
@@ -80,6 +85,8 @@ git clone https://github.com/DseaKu/job-radar && cd job-radar
 cp sources.example.yaml sources.yaml   # and optional config.example.yaml → config.yaml
 cargo run --release -- --cv cv.txt
 ```
+
+Or use the Makefile with `LOCAL=1`: `make search LOCAL=1`.
 
 **Demo** with fictional data (needs Rust, Python 3 and Ollama, about 1 minute):
 `ollama pull qwen3:1.7b && demo/run.sh`
