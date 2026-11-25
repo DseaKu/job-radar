@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::env;
+use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::{Value, json};
@@ -65,6 +66,19 @@ impl std::fmt::Display for ReplyCutOff {
 
 impl std::error::Error for ReplyCutOff {}
 
+/// The provider rejected the API key (HTTP 401 or 403). All further requests fail the same
+/// way, so a search stops at the first one.
+#[derive(Debug)]
+pub struct KeyRejected(String);
+
+impl std::fmt::Display for KeyRejected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for KeyRejected {}
+
 /// The LLM provider that the agents talk to, built from the active config entry.
 ///
 /// Ollama uses its native chat API (the only one that accepts a context size),
@@ -75,6 +89,8 @@ pub struct Backend {
     http: reqwest::Client,
     base_url: String,
     api_key: Option<String>,
+    /// The environment variable of the API key, if the provider needs one.
+    key_var: Option<String>,
     model: String,
     max_tokens: u32,
     effort: Option<String>,
@@ -107,6 +123,7 @@ impl Backend {
     ) -> Res<Self> {
         let (name, p) = config.active_provider()?;
 
+        let key_var = Config::api_key_var(p).map(str::to_string);
         let api_key =
             match Config::api_key_var(p) {
                 Some(var) => Some(api_key(var).filter(|k| !k.trim().is_empty()).ok_or_else(
@@ -146,6 +163,7 @@ impl Backend {
             stream: p.stream.unwrap_or(false),
             base_url,
             api_key,
+            key_var,
             model: p.model.clone(),
             max_tokens: p.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
             effort: p.effort.clone(),
@@ -272,7 +290,7 @@ impl Backend {
         let status = response.status();
         if !status.is_success() {
             let text = response.text().await.map_err(|e| self.request_error(&e))?;
-            return Err(self.http_error(status, &text).into());
+            return Err(self.http_error(status, &text));
         }
         let mut stream = StreamReply::default();
         let mut buf: Vec<u8> = Vec::new();
@@ -449,23 +467,58 @@ impl Backend {
             }
         };
         if !status.is_success() {
-            return Err(format!(
-                "API request failed ({status}): {payload}{}",
-                status_hint(status.as_u16(), &self.name)
-            )
-            .into());
+            return Err(self.status_error(status, &payload));
         }
         Ok(payload)
     }
 
-    /// The message for an HTTP error status with the reply text (JSON or an HTML page).
-    fn http_error(&self, status: reqwest::StatusCode, text: &str) -> String {
+    /// The error for an HTTP error status with the reply text (JSON or an HTML page).
+    fn http_error(&self, status: reqwest::StatusCode, text: &str) -> Box<dyn Error + Send + Sync> {
         let payload: Value =
             serde_json::from_str(text).unwrap_or_else(|_| Value::String(preview(text)));
+        self.status_error(status, &payload)
+    }
+
+    /// The error for an HTTP error status and the parsed reply. 401 and 403 give [`KeyRejected`].
+    fn status_error(
+        &self,
+        status: reqwest::StatusCode,
+        payload: &Value,
+    ) -> Box<dyn Error + Send + Sync> {
+        if matches!(status.as_u16(), 401 | 403) {
+            return Box::new(self.key_rejected(status, payload));
+        }
         format!(
             "API request failed ({status}): {payload}{}",
             status_hint(status.as_u16(), &self.name)
         )
+        .into()
+    }
+
+    /// A short message for a rejected API key: which key, the provider's reason, what to do.
+    fn key_rejected(&self, status: reqwest::StatusCode, payload: &Value) -> KeyRejected {
+        let reason = match &payload["error"]["message"] {
+            Value::String(m) => m.clone(),
+            _ => match payload {
+                Value::String(text) => text.clone(),
+                other => other.to_string(),
+            },
+        };
+        let name = &self.name;
+        let Some(var) = &self.key_var else {
+            return KeyRejected(format!(
+                "{name} needs an API key ({status}: {reason}). Set api_key_env for this \
+                 provider in config.yaml and put the key in .env."
+            ));
+        };
+        let todo = if status.as_u16() == 403 {
+            "The key has no access to this API or model: check the key and the model name."
+        } else {
+            "Make a new key at the provider and put it in .env (app: Settings > AI provider)."
+        };
+        KeyRejected(format!(
+            "{name} rejected the API key in {var} ({status}: {reason}). {todo}"
+        ))
     }
 
     /// A readable message for a request without an HTTP reply: timeout, no connection and so on.
@@ -653,6 +706,23 @@ mod tests {
         assert!(status_hint(401, "p").contains(".env"));
         assert!(status_hint(524, "p").contains("context_length"));
         assert_eq!(status_hint(400, "p"), "");
+    }
+
+    #[tokio::test]
+    async fn rejected_key_gives_a_short_message() {
+        let url = server(
+            "HTTP/1.1 401 Unauthorized\r\ncontent-type: application/json\r\ncontent-length: 86\r\n\r\n\
+             {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"}}",
+            0,
+        )
+        .await;
+        let err = backend_at(&url, "").chat("s", "u").await.unwrap_err();
+        assert!(err.is::<KeyRejected>());
+        assert_eq!(
+            err.to_string(),
+            "p rejected the API key in PATH (401 Unauthorized: invalid x-api-key). \
+             Make a new key at the provider and put it in .env (app: Settings > AI provider)."
+        );
     }
 
     #[tokio::test]

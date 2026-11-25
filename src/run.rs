@@ -4,7 +4,7 @@
 use serde::Serialize;
 
 use crate::Res;
-use crate::backend::{Backend, Usage};
+use crate::backend::{Backend, KeyRejected, Usage};
 use crate::config::{Config, Source};
 use crate::ignore::{self, Rule};
 use crate::jobs::{self, JobRow};
@@ -133,6 +133,15 @@ pub async fn run(
                 });
                 rows.extend(found);
             }
+            // A rejected API key fails for each page the same way: stop the search.
+            Err(e) if e.is::<KeyRejected>() => {
+                on_progress(Progress::SourceDone {
+                    name: name.clone(),
+                    jobs: 0,
+                    error: Some(e.to_string()),
+                });
+                return Err(e);
+            }
             Err(e) => {
                 warn!("error: {name}: {e}");
                 on_progress(Progress::SourceDone {
@@ -195,6 +204,85 @@ mod tests {
             url: format!("https://{name}.de"),
             enabled,
         }
+    }
+
+    /// A local server: GET gives a small career page, POST (an AI call) gives 401.
+    /// Returns the address and the number of AI calls.
+    async fn server_with_wrong_key() -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let calls = std::sync::Arc::new(AtomicUsize::new(0));
+        let counter = calls.clone();
+        tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let counter = counter.clone();
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 65536];
+                    let n = socket.read(&mut buf).await.unwrap_or(0);
+                    let (status, body) = if buf[..n].starts_with(b"GET") {
+                        (
+                            "200 OK",
+                            "<html><body><p>Developer in Witten</p></body></html>",
+                        )
+                    } else {
+                        counter.fetch_add(1, Ordering::SeqCst);
+                        (
+                            "401 Unauthorized",
+                            r#"{"error":{"message":"invalid x-api-key"}}"#,
+                        )
+                    };
+                    let reply = format!(
+                        "HTTP/1.1 {status}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                    let _ = socket.write_all(reply.as_bytes()).await;
+                });
+            }
+        });
+        (format!("http://{addr}"), calls)
+    }
+
+    #[tokio::test]
+    async fn a_rejected_key_stops_the_search_at_the_first_page() {
+        let (url, calls) = server_with_wrong_key().await;
+        let config: Config = serde_yaml::from_str(&format!(
+            "active: p\nproviders:\n  p:\n    type: openai\n    model: m\n    \
+             base_url: {url}\n    api_key_env: TEST_KEY\n"
+        ))
+        .unwrap();
+        let backend = Backend::from_config_with_keys(&config, |_| Some("wrong".into())).unwrap();
+        let targets = vec![
+            ("a".to_string(), format!("{url}/a")),
+            ("b".to_string(), format!("{url}/b")),
+        ];
+        let opts = Options {
+            cv: "CV",
+            targets: &targets,
+            kill_dups: false,
+            dump: None,
+        };
+        let steps = std::sync::Mutex::new(Vec::new());
+        let http = crate::http_client().unwrap();
+        let err = match run(&backend, &config, &[], &opts, &http, |p| {
+            steps.lock().unwrap().push(p)
+        })
+        .await
+        {
+            Ok(_) => panic!("the search must fail"),
+            Err(e) => e,
+        };
+
+        assert!(err.is::<KeyRejected>(), "{err}");
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        // Page "b" is not read.
+        let steps = steps.into_inner().unwrap();
+        assert!(matches!(&steps[..], [
+            Progress::Source { name, .. },
+            Progress::SourceDone { error: Some(_), .. },
+        ] if name == "a"));
     }
 
     #[test]
