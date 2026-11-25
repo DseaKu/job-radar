@@ -4,7 +4,7 @@
 use serde::Serialize;
 
 use crate::Res;
-use crate::backend::{Backend, KeyRejected, Usage};
+use crate::backend::{Backend, ProviderUnusable, Usage};
 use crate::config::{Config, Source};
 use crate::ignore::{self, Rule};
 use crate::jobs::{self, JobRow};
@@ -133,8 +133,8 @@ pub async fn run(
                 });
                 rows.extend(found);
             }
-            // A rejected API key fails for each page the same way: stop the search.
-            Err(e) if e.is::<KeyRejected>() => {
+            // A rejected API key or no connection to the AI fails each page the same way: stop.
+            Err(e) if e.is::<ProviderUnusable>() => {
                 on_progress(Progress::SourceDone {
                     name: name.clone(),
                     jobs: 0,
@@ -245,18 +245,20 @@ mod tests {
         (format!("http://{addr}"), calls)
     }
 
-    #[tokio::test]
-    async fn a_rejected_key_stops_the_search_at_the_first_page() {
-        let (url, calls) = server_with_wrong_key().await;
+    /// Runs a search over two pages ("a" and "b") of `pages` with the AI at `ai_url`.
+    async fn search_with_bad_ai(
+        pages: &str,
+        ai_url: &str,
+    ) -> (Box<dyn std::error::Error + Send + Sync>, Vec<Progress>) {
         let config: Config = serde_yaml::from_str(&format!(
             "active: p\nproviders:\n  p:\n    type: openai\n    model: m\n    \
-             base_url: {url}\n    api_key_env: TEST_KEY\n"
+             base_url: {ai_url}\n    api_key_env: TEST_KEY\n"
         ))
         .unwrap();
         let backend = Backend::from_config_with_keys(&config, |_| Some("wrong".into())).unwrap();
         let targets = vec![
-            ("a".to_string(), format!("{url}/a")),
-            ("b".to_string(), format!("{url}/b")),
+            ("a".to_string(), format!("{pages}/a")),
+            ("b".to_string(), format!("{pages}/b")),
         ];
         let opts = Options {
             cv: "CV",
@@ -266,23 +268,40 @@ mod tests {
         };
         let steps = std::sync::Mutex::new(Vec::new());
         let http = crate::http_client().unwrap();
-        let err = match run(&backend, &config, &[], &opts, &http, |p| {
+        let result = run(&backend, &config, &[], &opts, &http, |p| {
             steps.lock().unwrap().push(p)
         })
-        .await
-        {
-            Ok(_) => panic!("the search must fail"),
-            Err(e) => e,
+        .await;
+        let Err(err) = result else {
+            panic!("the search must fail")
         };
+        (err, steps.into_inner().unwrap())
+    }
 
-        assert!(err.is::<KeyRejected>(), "{err}");
-        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
-        // Page "b" is not read.
-        let steps = steps.into_inner().unwrap();
-        assert!(matches!(&steps[..], [
+    /// Page "a" is read and fails, page "b" is not read.
+    fn stopped_at_first_page(steps: &[Progress]) -> bool {
+        matches!(steps, [
             Progress::Source { name, .. },
             Progress::SourceDone { error: Some(_), .. },
-        ] if name == "a"));
+        ] if name == "a")
+    }
+
+    #[tokio::test]
+    async fn a_rejected_key_stops_the_search_at_the_first_page() {
+        let (url, calls) = server_with_wrong_key().await;
+        let (err, steps) = search_with_bad_ai(&url, &url).await;
+        assert!(err.is::<ProviderUnusable>(), "{err}");
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(stopped_at_first_page(&steps), "{steps:?}");
+    }
+
+    #[tokio::test]
+    async fn no_connection_to_the_ai_stops_the_search_at_the_first_page() {
+        let (url, _) = server_with_wrong_key().await;
+        // Nothing listens on port 1.
+        let (err, steps) = search_with_bad_ai(&url, "http://127.0.0.1:1").await;
+        assert!(err.is::<ProviderUnusable>(), "{err}");
+        assert!(stopped_at_first_page(&steps), "{steps:?}");
     }
 
     #[test]

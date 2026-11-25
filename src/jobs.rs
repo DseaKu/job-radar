@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::Res;
-use crate::backend::{Backend, KeyRejected, ReplyCutOff};
+use crate::backend::{Backend, ProviderUnusable, ReplyCutOff};
 
 /// Below this page budget, the model would see too little of the page to be useful.
 const MIN_PAGE_CHARS: usize = 2_000;
@@ -103,8 +103,8 @@ pub async fn from_text(
         }
         let reply = match backend.chat(&system, &format!("{head}{chunk}")).await {
             Ok(r) => r,
-            // A rejected key fails for each slice the same way: stop at once.
-            Err(e) if e.is::<KeyRejected>() => return Err(e),
+            // A rejected key or no connection fails each slice the same way: stop at once.
+            Err(e) if e.is::<ProviderUnusable>() => return Err(e),
             Err(e) => match e.downcast::<ReplyCutOff>() {
                 Ok(cut) => {
                     let saved = parse_partial_array(&cut.partial);
